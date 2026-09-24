@@ -15,6 +15,7 @@ import Divider from "@mui/material/Divider";
 import Tooltip from "@mui/material/Tooltip";
 import Chip from "@mui/material/Chip";
 import Button from "@mui/material/Button";
+import CircularProgress from "@mui/material/CircularProgress";
 import { Bell as BellIcon } from "@phosphor-icons/react/dist/ssr/Bell";
 import { List as ListIcon } from "@phosphor-icons/react/dist/ssr/List";
 import { Clock as ClockIcon } from "@phosphor-icons/react/dist/ssr/Clock";
@@ -82,6 +83,8 @@ export function AppBarNav(): React.JSX.Element {
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
   const [notifAnchorEl, setNotifAnchorEl] = useState<HTMLButtonElement | null>(null);
   const notifOpenRef = useRef(false);
+  const [loadingNotifs, setLoadingNotifs] = useState<boolean>(false);
+  const hasLoadedNotifs = useRef<boolean>(false);
   const [page, setPage] = useState(1);
 
   const router = useRouter();
@@ -168,8 +171,26 @@ export function AppBarNav(): React.JSX.Element {
 
   const fetchCompanies = useCallback(async () => {
     try {
+      if (typeof window !== "undefined") {
+        const cached = sessionStorage.getItem("cached_companies");
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setCompanies(parsed);
+              return;
+            }
+          } catch {
+            sessionStorage.removeItem("cached_companies");
+          }
+        }
+      }
       const res = await CompanyAPI.getAll({ page: 1, limit: 100 });
-      setCompanies(res.data.results || []);
+      const results = res.data.results || [];
+      setCompanies(results);
+      if (typeof window !== "undefined" && results.length > 0) {
+        sessionStorage.setItem("cached_companies", JSON.stringify(results));
+      }
     } catch (error) {
       console.error("Failed to load companies", error);
     }
@@ -184,6 +205,7 @@ export function AppBarNav(): React.JSX.Element {
   // Fetch unified notifications
   const fetchNotifications = useCallback(async () => {
     try {
+      setLoadingNotifs(true);
       const [apps, tickets] = await Promise.all([
         ApplicationsAPI.getNewApplications(50),
         NotificationsAPI.getAdminNotifications(50)
@@ -204,10 +226,6 @@ export function AppBarNav(): React.JSX.Element {
         }))
       ];
 
-      console.log('Fetched Apps:', apps);
-      console.log('Fetched Tickets:', tickets);
-      console.log('Unified Notifications:', unified);
-
       // Sort by date descending
       unified.sort((a, b) => {
         const dateA = isNaN(a.date) ? 0 : a.date;
@@ -215,20 +233,23 @@ export function AppBarNav(): React.JSX.Element {
         return dateB - dateA;
       });
       setNotifications(unified);
+      hasLoadedNotifs.current = true;
     } catch (error) {
       console.error("Failed to fetch notifications", error);
+    } finally {
+      setLoadingNotifs(false);
     }
   }, []);
 
   useEffect(() => {
     if (pathname === "/login" || isSales) return;
 
-    fetchNotifications();
-
     // Connect to the Express server (port 8080) where applications are created
     const webUrl =
       process.env.NEXT_PUBLIC_WEB_URL?.replace("/api/v1", "") || "http://localhost:8080";
-    const socket = io(webUrl);
+    const socket = io(webUrl, {
+      transports: ["websocket"],
+    });
 
     socket.on("connect", () => {
       console.log("Connected to WebSocket notifications server on port 8080");
@@ -281,7 +302,7 @@ export function AppBarNav(): React.JSX.Element {
     return () => {
       socket.disconnect();
     };
-  }, [fetchNotifications, isSales, pathname]);
+  }, [isSales, pathname]);
 
 
   const unreadCount = notifications.filter((n) => !seenIds.has(n.id)).length;
@@ -293,6 +314,9 @@ export function AppBarNav(): React.JSX.Element {
   const handleNotifOpen = (event: React.MouseEvent<HTMLButtonElement>) => {
     setNotifAnchorEl(event.currentTarget);
     notifOpenRef.current = true;
+    if (!hasLoadedNotifs.current) {
+      fetchNotifications();
+    }
   };
 
   const handleNotifClose = () => {
@@ -833,7 +857,23 @@ export function AppBarNav(): React.JSX.Element {
 
                   {/* Application List */}
                   <Box sx={{ overflowY: "auto", flex: 1 }}>
-                    {notifications.length === 0 ? (
+                    {loadingNotifs ? (
+                      <Box
+                        sx={{
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          py: 5,
+                          gap: 1.5,
+                        }}
+                      >
+                        <CircularProgress size={28} sx={{ color: "#3949ab" }} />
+                        <Typography color="text.secondary" fontSize="0.85rem">
+                          Loading notifications...
+                        </Typography>
+                      </Box>
+                    ) : notifications.length === 0 ? (
                       <Box
                         sx={{
                           display: "flex",

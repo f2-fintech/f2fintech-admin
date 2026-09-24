@@ -9,6 +9,7 @@ import {
   StepLabel,
   Stepper,
   Typography,
+  Tooltip,
 } from "@mui/material";
 
 import Step1Form from "./Step1Form";
@@ -30,11 +31,11 @@ const steps_form: StepForm[] = [
     icon: "https://open-frontend-bucket.s3.amazonaws.com/open-capital/onboarding/register/icons/basic-details.svg",
   },
   {
-    label: "Statement upload",
+    label: "Documents Upload",
     icon: "https://open-frontend-bucket.s3.amazonaws.com/open-capital/onboarding/register/icons/statement.svg",
   },
   {
-    label: "Proﬁle details and proof",
+    label: "Core Documents",
     icon: "https://open-frontend-bucket.s3.amazonaws.com/open-capital/onboarding/register/icons/profile-details.svg",
   },
   {
@@ -43,11 +44,33 @@ const steps_form: StepForm[] = [
   },
 ];
 
-const stepLabels: string[] = ["Loan Details", "Statement Upload", "Profile & Proofs", "Additional Details"];
+const stepLabels: string[] = ["Loan Details", "Documents Upload", "Profile & Proofs", "Additional Details"];
 
 const MultiStepForm: React.FC = () => {
-  const [activeStep, setActiveStep] = useState<number>(0);
-  const [getStarted, setGetStarted] = useState<boolean>(false); // To toggle form fields display
+  const { getLocalStorage, setLocalStorage } = Utility();
+
+  const [activeStep, setActiveStep] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("activeStep");
+        if (saved !== null) {
+          const parsed = parseInt(saved, 10);
+          if (!isNaN(parsed) && parsed >= 0 && parsed <= 3) return parsed;
+        }
+      } catch (e) {}
+    }
+    return 0;
+  });
+
+  const [getStarted, setGetStarted] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return Boolean(localStorage.getItem("step1GetStarted"));
+      } catch (e) {}
+    }
+    return false;
+  });
+
   const [applicationNumber, setApplicationNumber] = useState<string | null>(null); // for step form 1
   const [applicationData, setApplicationData] = useState<any>(null); // for step form 1
   const [allUploadsSuccess, setAllUploadsSuccess] = useState<boolean | null>(null); // Track if all uploads were successful for step form 3
@@ -64,21 +87,24 @@ const MultiStepForm: React.FC = () => {
     step4: false,
   });
 
-  const { getLocalStorage, setLocalStorage } = Utility();
   const storedCustomerId = getLocalStorage("customerInfo")?.id;
 
   // Restore step and progress from localStorage on mount
   useEffect(() => {
     const savedActiveStep = getLocalStorage("activeStep");
-    if (savedActiveStep) {
+    if (savedActiveStep !== null && savedActiveStep !== undefined) {
       setActiveStep(parseInt(savedActiveStep, 10));
     }
-  }, [applicationData?.salary]);
+    const savedGetStarted = getLocalStorage("step1GetStarted");
+    if (savedGetStarted) {
+      setGetStarted(true);
+    }
+  }, []);
 
   // Save active step and progress to localStorage
   useEffect(() => {
     setLocalStorage("activeStep", activeStep);
-  }, [activeStep, applicationData?.salary]);
+  }, [activeStep]);
 
   const handleNext = (): void => {
     setActiveStep((prevActiveStep) => prevActiveStep + 1);
@@ -192,26 +218,51 @@ const MultiStepForm: React.FC = () => {
           overflow: "visible",
         }}
       >
-        {/* Full Width Top Line-Stepper */}
-        {!applicationData?.salary && (
-          <Box
-            sx={{
-              display: "flex",
-              width: "100%",
-              justifyContent: "space-between",
-              px: { xs: 2, sm: 4, md: 8 },
-              pt: 4,
-              pb: 3,
-              borderBottom: "1px solid #f1f5f9",
-              backgroundColor: "#ffffff",
-            }}
-          >
-            {stepLabels.map((label, index) => {
-              const isActive = index === activeStep;
-              const isSkipped = index === 1 && (getLocalStorage("StatementUploadSkipped") === true || getLocalStorage("StatementUploadSkipped") === "true");
-              const isCompleted = index < activeStep && !isSkipped;
-              return (
-                <Box key={label} sx={{ flex: 1, mx: 1 }}>
+        {/* Full Width Top Line-Stepper (Read-Only Progress Indicator) */}
+        <Box
+          sx={{
+            display: "flex",
+            width: "100%",
+            justifyContent: "space-between",
+            px: { xs: 2, sm: 4, md: 8 },
+            pt: 4,
+            pb: 3,
+            borderBottom: "1px solid #f1f5f9",
+            backgroundColor: "#ffffff",
+          }}
+        >
+          {stepLabels.map((label, index) => {
+            const isActive = index === activeStep;
+            const isSkipped = index === 1 && (getLocalStorage("StatementUploadSkipped") === true || getLocalStorage("StatementUploadSkipped") === "true");
+            const isCompleted = index < activeStep && !isSkipped;
+            const isFuture = index > activeStep;
+
+            const tooltipTitle = isFuture
+              ? "Complete current step to proceed"
+              : isCompleted
+              ? "Step completed"
+              : "Current active step";
+
+            return (
+              <Tooltip
+                key={label}
+                title={tooltipTitle}
+                arrow
+                placement="bottom"
+              >
+                <Box
+                  sx={{
+                    flex: 1,
+                    mx: 1,
+                    cursor: isFuture ? "not-allowed" : "default",
+                    userSelect: "none",
+                    opacity: isFuture ? 0.55 : 1,
+                    transition: "all 0.2s ease",
+                    "&:hover": {
+                      cursor: isFuture ? "not-allowed" : "default",
+                    },
+                  }}
+                >
                   <Typography
                     sx={{
                       fontSize: { xs: "11px", sm: "13px", md: "14px" },
@@ -234,21 +285,26 @@ const MultiStepForm: React.FC = () => {
                         Skipped
                       </span>
                     )}
+                    {isCompleted && (
+                      <span style={{ fontSize: "12px", color: "#16a34a", fontWeight: 700, marginLeft: "2px" }}>
+                        ✓
+                      </span>
+                    )}
                   </Typography>
                   <Box
                     sx={{
                       height: "4px",
                       width: "100%",
-                      backgroundColor: isActive ? "#3949ab" : (isSkipped || isCompleted) ? "#c7d2fe" : "#e2e8f0",
+                      backgroundColor: isActive ? "#3949ab" : (isSkipped || isCompleted) ? "#93c5fd" : "#e2e8f0",
                       borderRadius: "2px",
                       transition: "all 0.3s ease",
                     }}
                   />
                 </Box>
-              );
-            })}
-          </Box>
-        )}
+              </Tooltip>
+            );
+          })}
+        </Box>
 
         {/* Two-Column Space Below Stepper */}
         <Box
@@ -262,7 +318,7 @@ const MultiStepForm: React.FC = () => {
           {/* Left Side Presentation Pane with Logo & Brand Headline */}
           <Box
             sx={{
-              display: applicationData?.salary ? "none" : "flex",
+              display: "flex",
               flexDirection: "column",
               width: { xs: "100%", md: "42%" },
               backgroundColor: "#f8fafc",
@@ -274,21 +330,22 @@ const MultiStepForm: React.FC = () => {
             <Box
               sx={{
                 position: "sticky",
-                top: "100px",
-                padding: { xs: "30px 20px", sm: "40px 30px", md: "60px 50px" },
+                top: "80px",
+                padding: { xs: "24px 16px", sm: "32px 24px", md: "40px 32px" },
                 display: "flex",
                 flexDirection: "column",
-                alignItems: "center", // Align all items perfectly in the middle
-                zIndex: 1, // Safely stacks below top headers and global navigation bars
+                alignItems: "center",
+                zIndex: 1,
+                width: "100%",
               }}
             >
-              {/* Centered & Massively Enlarged Main Logo */}
+              {/* Centered Main Logo */}
               <Box
                 sx={{
                   width: "100%",
                   display: "flex",
                   justifyContent: "center",
-                  mb: { xs: 1.5, sm: 2, md: 2.5 }, // Tightened spacing below the logo
+                  mb: { xs: 1, sm: 1.5, md: 2 },
                 }}
               >
                 <Box
@@ -296,40 +353,42 @@ const MultiStepForm: React.FC = () => {
                   src="/img/f2Fintechlogo.png"
                   alt="F2Fintech Logo"
                   sx={{
-                    height: { xs: "80px", sm: "110px", md: "150px" },
+                    height: { xs: "70px", sm: "90px", md: "115px" },
                     width: "auto",
                     objectFit: "contain",
                     filter: "drop-shadow(0px 4px 12px rgba(57, 73, 171, 0.08))",
                   }}
                 />
               </Box>
+
               <Typography
                 sx={{
                   fontFamily: "'Inter', sans-serif",
-                  fontSize: { xs: "1.8rem", sm: "2.2rem", md: "2.6rem" },
+                  fontSize: { xs: "1.5rem", sm: "1.8rem", md: "2.1rem" },
                   fontWeight: 800,
                   color: "#0f172a",
                   lineHeight: 1.15,
                   letterSpacing: "-0.02em",
-                  mb: 2.5,
-                  textAlign: "center", // Explicitly center the application console text
+                  mb: 1,
+                  textAlign: "center",
                 }}
               >
                 Application<br />
                 <span style={{ color: "#3949ab" }}>Intake Console</span>
               </Typography>
+
               <Typography
                 sx={{
                   fontFamily: "'Inter', sans-serif",
-                  fontSize: { xs: "13px", sm: "14px", md: "15px" },
-                  color: "#475569",
-                  lineHeight: 1.6,
+                  fontSize: "13px",
+                  color: "#64748b",
+                  lineHeight: 1.5,
                   fontWeight: 500,
                   maxWidth: "340px",
-                  textAlign: "center", // Explicitly center the descriptive copy
+                  textAlign: "center",
                 }}
               >
-                Internal operations module to initialize new customer financing profiles, structure loan parameters, and track multi-provider approval lifecycles.
+                Internal operations module to initialize customer financing profiles, structure loan parameters, and track multi-provider approval lifecycles.
               </Typography>
             </Box>
           </Box>
@@ -341,8 +400,8 @@ const MultiStepForm: React.FC = () => {
               flexDirection: "column",
               justifyContent: "flex-start",
               alignItems: "center",
-              width: { xs: "100%", md: applicationData?.salary ? "100%" : "58%" },
-              padding: { xs: "20px 10px", sm: "30px 20px", md: "40px 40px" },
+              width: { xs: "100%", md: "58%" },
+              padding: { xs: "16px 10px", sm: "20px 20px", md: "24px 32px" },
               backgroundColor: "#ffffff",
               overflowY: "auto",
             }}
@@ -350,7 +409,6 @@ const MultiStepForm: React.FC = () => {
             <Box sx={{ width: "100%", maxWidth: "680px" }}>
               {getStepContent(activeStep)}
               {activeStep === 0 &&
-                !applicationData?.salary &&
                 !getStarted &&
                 applicationNumber && (
                   <Box

@@ -34,7 +34,7 @@ const fetcherWithCompanyId = async ( url: string, companyId?: number ) => {
  */
 export const useGetLoanProviders = (
   initialData: LoanProvider | null,
-  pathKey: string,
+  pathKey: string | null,
   page: number = 1,
   limit: number = 6
 ) => {
@@ -43,7 +43,7 @@ export const useGetLoanProviders = (
     error,
     isValidating,
   } = useSWR<LoanProvider | null>(
-    `${pathKey}?page=${page}&limit=${limit}`,
+    pathKey ? `${pathKey}?page=${page}&limit=${limit}` : null,
     fetcher,
     {
       fallbackData: initialData,
@@ -52,7 +52,7 @@ export const useGetLoanProviders = (
     }
   );
   const refetch = async () => {
-    return await mutate(`${pathKey}?page=${page}&limit=${limit}`);
+    return pathKey ? await mutate(`${pathKey}?page=${page}&limit=${limit}`) : null;
   };
 
   return {
