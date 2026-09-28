@@ -171,10 +171,11 @@ export const useDeleteTicket = () => {
       return ticket;
     } catch (err) {
       setError(err as Error);
+      throw err;
     } finally {
       setLoading(false);
     }
   };
 
   return { loading, error, deleteTicket };
-}
+};

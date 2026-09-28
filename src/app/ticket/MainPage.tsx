@@ -153,6 +153,7 @@ const Ticket = () => {
   const {
     value: ticketData,
     swrLoading,
+    refetcher,
   } = useGetTickets(
     apiEndpoint,
     currentPage,
@@ -718,8 +719,10 @@ const Ticket = () => {
       reason,
       currentUserId
     );
-    setCurrentPage(1);
-    window.location.reload();
+    dispatch(removeTicket(ticketId));
+    if (refetcher) {
+      await refetcher();
+    }
     return deleteTicketResp;
   };
   const theme = useTheme();
@@ -1120,7 +1123,7 @@ const Ticket = () => {
                       <TableBody>
                         {ticket.results.map((ticket, index) => (
                           <ApplicationCard
-                            key={index}
+                            key={ticket.ticketId || ticket.applicationId || index}
                             mainIndex={index + 1}
                             customerApplication={ticket}
                             userRole={userRole}
@@ -1140,7 +1143,7 @@ const Ticket = () => {
                 <Grid container spacing={2}>
                   {ticket.results.map((ticket, index) => (
                     <ApplicationCard
-                      key={index}
+                      key={ticket.ticketId || ticket.applicationId || index}
                       mainIndex={index + 1}
                       customerApplication={ticket}
                       userRole={userRole}

@@ -28,6 +28,7 @@ import {
   TableRow,
   Modal,
   Tooltip,
+  CircularProgress,
 } from "@mui/material";
 import dayjs, { Dayjs } from "dayjs";
 import {
@@ -360,14 +361,25 @@ const ApplicationCard: React.FC<ApplicationCardProps> = ({
   const [appliedByName, setAppliedByName] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!customerApplication.appliedBy) return;
+    if (!customerApplication.appliedBy) {
+      setAppliedByName(null);
+      return;
+    }
+    let isMounted = true;
     axiosInstance
       .get(`get-user-name/${customerApplication.appliedBy}`)
       .then((res) => {
+        if (!isMounted) return;
         const username = res.data?.data?.username;
         if (username) setAppliedByName(username);
+        else setAppliedByName(null);
       })
-      .catch(() => { });
+      .catch(() => {
+        if (isMounted) setAppliedByName(null);
+      });
+    return () => {
+      isMounted = false;
+    };
   }, [customerApplication.appliedBy]);
 
   const dispatch: AppDispatch = useDispatch();
@@ -383,6 +395,17 @@ const ApplicationCard: React.FC<ApplicationCardProps> = ({
   const isTab = useMediaQuery("(min-width:601px) and (max-width:1200px)");
   const isIpad = useMediaQuery("(min-width:1000px) and (max-width:1300px)");
   const [deleteReason, setDeleteReason] = useState<string>("");
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const deleteTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    if (openDeleteDialog) {
+      const timer = setTimeout(() => {
+        deleteTextareaRef.current?.focus();
+      }, 120);
+      return () => clearTimeout(timer);
+    }
+  }, [openDeleteDialog]);
 
   const isOverdue = React.useMemo(() => {
     if (!customerApplication.due_date || customerApplication.approved_At) return false;
@@ -421,7 +444,9 @@ const ApplicationCard: React.FC<ApplicationCardProps> = ({
   };
 
   const closeConfirmDialog = () => {
+    if (isDeleting) return;
     setOpenDeleteDialog(false);
+    setDeleteReason("");
   };
 
   const confirmDelete = async () => {
@@ -440,6 +465,7 @@ const ApplicationCard: React.FC<ApplicationCardProps> = ({
 
     if (handleDeleteTicket && !isApplication) {
       try {
+        setIsDeleting(true);
         await handleDeleteTicket(customerApplication.ticketId, deleteReason);
         toastAndNavigate(
           dispatch,
@@ -462,6 +488,8 @@ const ApplicationCard: React.FC<ApplicationCardProps> = ({
           null,
           true
         );
+      } finally {
+        setIsDeleting(false);
       }
     }
     if (isApplication && handleDeleteApplication) {
@@ -2735,167 +2763,243 @@ const ApplicationCard: React.FC<ApplicationCardProps> = ({
       >
         <Fade in={openDeleteDialog}>
           <Paper
+            elevation={0}
             sx={{
               position: 'absolute',
               top: '50%',
               left: '50%',
               transform: 'translate(-50%, -50%)',
-              width: '90%',
-              maxWidth: 400,
-              borderRadius: 3,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-              bgcolor: 'background.paper',
+              width: '92%',
+              maxWidth: 440,
+              borderRadius: '12px',
+              boxShadow: '0 20px 35px -10px rgba(15, 23, 42, 0.2), 0 0 0 1px rgba(226, 232, 240, 0.9)',
+              bgcolor: '#ffffff',
               outline: 'none',
               overflow: 'hidden',
             }}
           >
+            {/* Header */}
             <Box
               sx={{
-                p: 2,
-                background: "#3f50b5",
-                color: 'primary.contrastText',
+                px: 2.5,
+                py: 2,
+                background: 'linear-gradient(135deg, #2b3e94 0%, #3f50b5 100%)',
+                color: '#ffffff',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
               }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <WarningAmber sx={{ color: '#fff', fontSize: 28 }} />
-                <Typography variant="h6" sx={{ color: '#fff', fontWeight: 600, fontFamily: "'Inter', sans-serif" }}>
-                  Confirm Ticket Deletion
-                </Typography>
-              </Box>
-              <IconButton
-                onClick={closeConfirmDialog}
-                sx={{
-                  color: '#fff',
-                  '&:hover': {
-                    bgcolor: 'rgba(255,255,255,0.1)',
-                  },
-                }}
-              >
-                <Close />
-              </IconButton>
-            </Box>
-
-            <Box sx={{ p: 3, bgcolor: "#f5f8ff", textAlign: 'center' }}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  mb: 2,
-                }}
-              >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <Box
                   sx={{
-                    width: 64,
-                    height: 64,
-                    borderRadius: '50%',
-                    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+                    width: 36,
+                    height: 36,
+                    borderRadius: '8px',
+                    bgcolor: 'rgba(255, 255, 255, 0.15)',
+                    border: '1px solid rgba(255, 255, 255, 0.25)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    border: '3px solid rgba(255, 59, 48, 0.2)',
+                    color: '#ffffff',
+                    flexShrink: 0,
                   }}
                 >
-                  <DeleteForever
-                    sx={{
-                      fontSize: '2rem',
-                      color: '#FF3B30',
-                    }}
-                  />
+                  <DeleteOutline sx={{ fontSize: 20 }} />
                 </Box>
+                <Box>
+                  <Typography
+                    sx={{
+                      fontWeight: 700,
+                      fontSize: '0.95rem',
+                      color: '#ffffff',
+                      lineHeight: 1.2,
+                      fontFamily: "'Inter', sans-serif",
+                    }}
+                  >
+                    Delete Ticket
+                  </Typography>
+                  <Typography
+                    sx={{
+                      fontSize: '0.75rem',
+                      color: 'rgba(255, 255, 255, 0.85)',
+                      mt: 0.3,
+                      fontFamily: "'Inter', sans-serif",
+                    }}
+                  >
+                    Ticket #{customerApplication?.ticketId || '—'} • {customerApplication?.customerName || 'Customer'}
+                  </Typography>
+                </Box>
+              </Box>
+              <IconButton
+                size="small"
+                onClick={closeConfirmDialog}
+                disabled={isDeleting}
+                sx={{
+                  color: 'rgba(255, 255, 255, 0.85)',
+                  borderRadius: '6px',
+                  p: 0.6,
+                  '&:hover': {
+                    color: '#ffffff',
+                    bgcolor: 'rgba(255, 255, 255, 0.18)',
+                  },
+                }}
+              >
+                <Close sx={{ fontSize: 18 }} />
+              </IconButton>
+            </Box>
+
+            {/* Body */}
+            <Box sx={{ p: 2.5, bgcolor: '#ffffff' }}>
+              {/* Notice Banner */}
+              <Box
+                sx={{
+                  p: 1.5,
+                  mb: 2,
+                  borderRadius: '8px',
+                  bgcolor: '#fffbeb',
+                  border: '1px solid #fef3c7',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 1.2,
+                }}
+              >
+                <WarningAmber sx={{ color: '#d97706', fontSize: 18, mt: 0.1, flexShrink: 0 }} />
+                <Typography
+                  sx={{
+                    fontSize: '0.78rem',
+                    color: '#92400e',
+                    lineHeight: 1.45,
+                    fontFamily: "'Inter', sans-serif",
+                  }}
+                >
+                  This ticket will be safely moved to archives. Active operations will stop, while all customer documents and histories remain preserved.
+                </Typography>
               </Box>
 
               <Typography
-                variant="body1"
                 sx={{
-                  color: '#4a5568',
-                  mb: 2,
-                  fontFamily: "'Inter', sans-serif"
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  color: '#334155',
+                  mb: 0.8,
+                  fontFamily: "'Inter', sans-serif",
                 }}
               >
-                Are you sure you want to delete this ticket? This action cannot be undone.
+                Reason for deletion{" "}
+                <span style={{ color: "#e05353", fontSize: "11px", fontWeight: 500, letterSpacing: "0.2px" }}>
+                  * (Mandatory)
+                </span>
               </Typography>
-
               <TextField
+                inputRef={deleteTextareaRef}
+                autoFocus
                 fullWidth
                 multiline
-                rows={3}
+                minRows={3}
+                maxRows={5}
                 variant="outlined"
-                label="Reason for deletion *"
+                placeholder="Enter a reason (e.g. Customer requested cancellation, duplicate application)..."
                 value={deleteReason}
+                disabled={isDeleting}
                 onChange={(e) => setDeleteReason(e.target.value)}
                 sx={{
-                  mt: 1,
-                  textAlign: 'left',
                   '& .MuiOutlinedInput-root': {
-                    bgcolor: '#ffffff',
-                    borderRadius: 2,
+                    bgcolor: '#f8fafc',
+                    borderRadius: '8px',
+                    padding: '10px 12px',
+                    fontSize: '0.85rem',
+                    fontFamily: "'Inter', sans-serif",
+                    color: '#1e293b',
+                    alignItems: 'flex-start',
                     '& fieldset': {
-                      borderColor: '#c4d5eb',
+                      borderColor: '#e2e8f0',
                     },
                     '&:hover fieldset': {
-                      borderColor: '#3f50b5',
+                      borderColor: '#cbd5e1',
                     },
                     '&.Mui-focused fieldset': {
                       borderColor: '#3f50b5',
-                      borderWidth: 2,
+                      borderWidth: '1.5px',
                     },
+                  },
+                  '& .MuiInputBase-inputMultiline': {
+                    padding: '0 !important',
+                    lineHeight: 1.5,
                   },
                 }}
               />
 
-              <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
+              {/* Action Buttons */}
+              <Box
+                sx={{
+                  mt: 2.5,
+                  pt: 2,
+                  borderTop: '1px solid #f1f5f9',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  alignItems: 'center',
+                  gap: 1.2,
+                }}
+              >
                 <Button
-                  fullWidth
-                  variant="outlined"
+                  size="small"
+                  disabled={isDeleting}
                   onClick={closeConfirmDialog}
                   sx={{
-                    borderRadius: 2,
-                    py: 1.2,
+                    px: 2,
+                    py: 0.6,
+                    borderRadius: '6px',
                     textTransform: 'none',
-                    fontSize: '0.95rem',
+                    fontSize: '0.82rem',
                     fontWeight: 600,
-                    borderWidth: 1.5,
-                    color: '#1e3a5f',
-                    borderColor: '#c4d5eb',
+                    color: '#475569',
+                    border: '1px solid #e2e8f0',
+                    bgcolor: '#ffffff',
                     fontFamily: "'Inter', sans-serif",
                     '&:hover': {
-                      borderWidth: 1.5,
-                      bgcolor: 'rgba(196, 213, 235, 0.2)',
-                      borderColor: '#1e3a5f',
+                      bgcolor: '#f8fafc',
+                      borderColor: '#cbd5e1',
                     },
                   }}
                 >
                   Cancel
                 </Button>
                 <Button
-                  fullWidth
+                  size="small"
                   variant="contained"
                   onClick={confirmDelete}
-                  disabled={!deleteReason.trim()}
-                  startIcon={<DeleteForever />}
+                  disabled={!deleteReason.trim() || isDeleting}
+                  startIcon={
+                    isDeleting ? (
+                      <CircularProgress size={14} sx={{ color: '#ffffff' }} />
+                    ) : (
+                      <DeleteOutline sx={{ fontSize: 16 }} />
+                    )
+                  }
                   sx={{
-                    borderRadius: 2,
-                    py: 1.2,
+                    px: 2.2,
+                    py: 0.6,
+                    borderRadius: '6px',
                     textTransform: 'none',
-                    fontSize: '0.95rem',
+                    fontSize: '0.82rem',
                     fontWeight: 600,
                     fontFamily: "'Inter', sans-serif",
-                    background: '#FF3B30',
-                    boxShadow: '0 4px 12px rgba(255, 59, 48, 0.25)',
+                    bgcolor: '#dc2626',
+                    color: '#ffffff',
+                    boxShadow: '0 1px 2px 0 rgba(220, 38, 38, 0.2)',
                     '&:hover': {
-                      background: '#D32F2F',
-                      boxShadow: '0 6px 16px rgba(255, 59, 48, 0.4)',
+                      bgcolor: '#b91c1c',
+                      boxShadow: '0 2px 4px 0 rgba(220, 38, 38, 0.3)',
                     },
                     '&:disabled': {
-                      backgroundColor: '#ffcdd2',
-                      color: '#f8f9fa',
+                      bgcolor: isDeleting ? '#dc2626' : '#fca5a5',
+                      color: '#ffffff',
+                      opacity: isDeleting ? 0.85 : 0.6,
                     },
                   }}
                 >
-                  Delete
+                  {isDeleting ? "Deleting..." : "Delete"}
                 </Button>
               </Box>
             </Box>

@@ -50,7 +50,7 @@ import dayjs from "dayjs";
 
 import DateRangeModal from "./DateRangeModal";
 import { User } from "@/types/user";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useGetLoanProviders } from "@/hooks/loanProvider";
 
 interface FilterPanelProps {
@@ -117,6 +117,9 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
   searchLabel,
   handleFilterChange,
 }) => {
+  const router = useRouter();
+  const pathname = usePathname();
+
   // anchorEl for the "status" menu
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   // anchorEl for the forwarded submenu
@@ -308,7 +311,6 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
 
   // Handler for opening the modal
   const handleDateModalOpen = () => setDateModalOpen(true);
-  const router = useRouter();
 
   // Format the date range to be displayed on the chip
   const formatDateRange = () => {
@@ -979,7 +981,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                   handleFilterChange({});
                   handleStatusChange(getDefaultStatus());
                   handleBankChange("all");
-                  router.replace("/ticket", undefined, { shallow: true });
+                  router.replace(pathname || "/ticket", undefined, { shallow: true });
                 }}
                 sx={{
                   color: "#ef4444",
