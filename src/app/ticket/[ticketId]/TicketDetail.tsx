@@ -17,8 +17,10 @@ import {
   useMediaQuery,
   useTheme,
   Tooltip,
+  IconButton,
+  CircularProgress,
 } from "@mui/material";
-import { ArrowBackRounded, EditRounded } from "@mui/icons-material";
+import { ArrowBackRounded, EditRounded, CloseRounded } from "@mui/icons-material";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { Utility } from "@/utils";
@@ -30,6 +32,35 @@ import { useCreateTicketHistory } from "@/hooks/tickethistory";
 import { useGetLoanProviders } from "@/hooks/loanProvider";
 import dayjs from "dayjs";
 import React from "react";
+import DropdownComponent from "../../components/common/DropdownComponent";
+
+const editFieldStyles = {
+  mb: 2,
+  '& .MuiOutlinedInput-root': {
+    bgcolor: '#ffffff',
+    borderRadius: '10px',
+    fontSize: { xs: '0.85rem', sm: '0.9rem' },
+    minHeight: '44px',
+    '& fieldset': {
+      borderColor: '#cbd5e1',
+      borderWidth: '1px',
+    },
+    '&:hover fieldset': {
+      borderColor: '#94a3b8',
+    },
+    '&.Mui-focused fieldset': {
+      borderColor: '#3949ab',
+      borderWidth: '2px',
+    },
+  },
+  '& .MuiInputLabel-root': {
+    fontSize: { xs: '0.85rem', sm: '0.9rem' },
+    color: '#475569',
+    '&.Mui-focused': {
+      color: '#3949ab',
+    },
+  },
+};
 
 const getSourcePill = (source?: string) => {
   const s = source?.toLowerCase()?.trim() || "";
@@ -121,6 +152,7 @@ const TicketDetail = ({ ticketDetailData, isTab }) => {
   const [openEditModal, setOpenEditModal] = useState(false);
   const [editedTicketData, setEditedTicketData] = useState(ticketDetailData);
   const [fetchedAppliedByName, setFetchedAppliedByName] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (editedTicketData?.appliedByName && editedTicketData.appliedByName !== "N/A") {
@@ -135,7 +167,7 @@ const TicketDetail = ({ ticketDetailData, isTab }) => {
         const username = res.data?.data?.username;
         if (username) setFetchedAppliedByName(username);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [editedTicketData?.appliedByName, editedTicketData?.appliedBy, editedTicketData?.applied_by]);
 
   const { createTicketHistory } = useCreateTicketHistory(
@@ -196,6 +228,7 @@ const TicketDetail = ({ ticketDetailData, isTab }) => {
   };
 
   const handleSaveEdit = async () => {
+    setIsSaving(true);
     try {
       // Call the update API on Save
       const { data: response } = await axiosInstance.patch(
@@ -238,6 +271,8 @@ const TicketDetail = ({ ticketDetailData, isTab }) => {
     } catch (error) {
       console.error("Error saving the ticket:", error);
       setOpenEditModal(false);
+    } finally {
+      setIsSaving(false);
     }
   };
   const DetailItem = ({ label, value, isOverdue = false }: { label: string; value: React.ReactNode; isOverdue?: boolean }) => (
@@ -288,9 +323,22 @@ const TicketDetail = ({ ticketDetailData, isTab }) => {
           <Box sx={{ display: "flex", alignItems: "flex-start" }}>
             <Tooltip title="Go back to the previous page">
               <Button
-                startIcon={<ArrowBackRounded />}
+                size="small"
+                startIcon={<ArrowBackRounded sx={{ fontSize: "18px !important" }} />}
                 onClick={() => router.back()}
-                sx={{ color: "black" }}
+                sx={{
+                  color: "#475569",
+                  textTransform: "none",
+                  fontWeight: 600,
+                  fontSize: "0.8rem",
+                  borderRadius: "6px",
+                  px: 1.5,
+                  py: 0.4,
+                  "&:hover": {
+                    bgcolor: "#f1f5f9",
+                    color: "#0f172a",
+                  },
+                }}
               >
                 Back
               </Button>
@@ -301,9 +349,21 @@ const TicketDetail = ({ ticketDetailData, isTab }) => {
           <Box sx={{ marginLeft: "auto" }}>
             <Tooltip title="Edit ticket details">
               <Button
-                startIcon={<EditRounded />}
+                size="small"
+                startIcon={<EditRounded sx={{ fontSize: "16px !important" }} />}
                 onClick={handleOpenEditModal}
-                sx={{ color: "black" }}
+                sx={{
+                  color: "#3949ab",
+                  textTransform: "none",
+                  fontWeight: 600,
+                  fontSize: "0.8rem",
+                  borderRadius: "6px",
+                  px: 1.5,
+                  py: 0.4,
+                  "&:hover": {
+                    bgcolor: "rgba(57, 73, 171, 0.08)",
+                  },
+                }}
               >
                 Edit
               </Button>
@@ -463,11 +523,38 @@ const TicketDetail = ({ ticketDetailData, isTab }) => {
           height: "70v%",
         }}
       >
-        <DialogTitle sx={{ fontWeight: "bold", textAlign: "center" }}>
+        <DialogTitle
+          sx={{
+            fontWeight: "bold",
+            textAlign: "center",
+            pb: 1,
+            position: "relative",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
           Edit Ticket Details
+          <IconButton
+            aria-label="close"
+            onClick={handleCloseEditModal}
+            size="small"
+            sx={{
+              position: "absolute",
+              right: 12,
+              top: 12,
+              color: "#64748b",
+              "&:hover": {
+                color: "#0f172a",
+                bgcolor: "rgba(0, 0, 0, 0.05)",
+              },
+            }}
+          >
+            <CloseRounded fontSize="small" />
+          </IconButton>
         </DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2}>
+        <DialogContent sx={{ pt: "20px !important", px: { xs: 2, sm: 3 } }}>
+          <Grid container spacing={2} sx={{ mt: 0 }}>
             <Grid item xs={12}>
               <TextField
                 label="Name"
@@ -475,31 +562,28 @@ const TicketDetail = ({ ticketDetailData, isTab }) => {
                 value={editedTicketData?.customerName || ""}
                 onChange={handleInputChange}
                 fullWidth
-                sx={{ mb: 2 }}
+                size="small"
+                variant="outlined"
+                sx={editFieldStyles}
                 autoComplete="off"
               />
             </Grid>
             {(userRole === "admin" || userRole === "sub admin") && (
-              <Grid item xs={12}>
-                <FormControl fullWidth sx={{ mb: 2 }}>
-                  <InputLabel id="provider-select-label">
-                    Loan Provider
-                  </InputLabel>
-                  <Select
-                    labelId="provider-select-label"
-                    id="provider-select"
-                    name="provider"
-                    value={editedTicketData?.provider || ""}
-                    label="Loan Provider"
-                    onChange={handleInputChange}
-                  >
-                    {PROVIDER_OPTIONS.map((bank) => (
-                      <MenuItem key={bank} value={bank}>
-                        {bank}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+              <Grid item xs={12} sx={{ mb: 2 }}>
+                <DropdownComponent
+                  id="edit-ticket-loan-provider"
+                  name="provider"
+                  label="Loan Provider"
+                  value={editedTicketData?.provider || ""}
+                  onChange={(val) =>
+                    setEditedTicketData((prev) => ({ ...prev, provider: val }))
+                  }
+                  options={PROVIDER_OPTIONS.map((bank) => ({
+                    label: bank,
+                    value: bank,
+                  }))}
+                  placeholder="Select Loan Provider"
+                />
               </Grid>
             )}
 
@@ -510,7 +594,9 @@ const TicketDetail = ({ ticketDetailData, isTab }) => {
                 value={editedTicketData?.customerEmail || ""}
                 onChange={handleInputChange}
                 fullWidth
-                sx={{ mb: 2 }}
+                size="small"
+                variant="outlined"
+                sx={editFieldStyles}
                 autoComplete="off"
               />
             </Grid>
@@ -521,7 +607,9 @@ const TicketDetail = ({ ticketDetailData, isTab }) => {
                 value={editedTicketData?.customerContact || ""}
                 onChange={handleInputChange}
                 fullWidth
-                sx={{ mb: 2 }}
+                size="small"
+                variant="outlined"
+                sx={editFieldStyles}
                 autoComplete="off"
               />
             </Grid>
@@ -533,7 +621,9 @@ const TicketDetail = ({ ticketDetailData, isTab }) => {
                 value={editedTicketData?.customerLocation || ""}
                 onChange={handleInputChange}
                 fullWidth
-                sx={{ mb: 2 }}
+                size="small"
+                variant="outlined"
+                sx={editFieldStyles}
                 autoComplete="off"
               />
             </Grid>
@@ -546,22 +636,58 @@ const TicketDetail = ({ ticketDetailData, isTab }) => {
                 value={editedTicketData?.applicationAmount || ""}
                 onChange={handleInputChange}
                 fullWidth
-                sx={{ mb: 2 }}
+                size="small"
+                variant="outlined"
+                sx={editFieldStyles}
                 autoComplete="off"
               />
             </Grid>
           </Grid>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ px: 3, pb: 2, pt: 1, gap: 1 }}>
           <Button
+            size="small"
             onClick={handleCloseEditModal}
-            color="secondary"
             variant="outlined"
+            sx={{
+              textTransform: "none",
+              fontWeight: 600,
+              fontSize: "0.8rem",
+              color: "#64748b",
+              borderColor: "#cbd5e1",
+              borderRadius: "6px",
+              px: 2,
+              py: 0.4,
+              "&:hover": {
+                bgcolor: "#f1f5f9",
+                borderColor: "#94a3b8",
+                color: "#0f172a",
+              },
+            }}
           >
             Cancel
           </Button>
-          <Button onClick={handleSaveEdit} color="primary" variant="contained">
-            Save
+          <Button
+            size="small"
+            onClick={handleSaveEdit}
+            variant="contained"
+            disabled={isSaving}
+            startIcon={isSaving ? <CircularProgress size={14} color="inherit" /> : null}
+            sx={{
+              bgcolor: "#3949ab",
+              color: "#ffffff",
+              textTransform: "none",
+              fontWeight: 600,
+              fontSize: "0.8rem",
+              borderRadius: "6px",
+              px: 2,
+              py: 0.4,
+              boxShadow: "none",
+              "&:hover": { bgcolor: "#303f9f", boxShadow: "none" },
+              "&:disabled": { bgcolor: "#cbd5e1", color: "#94a3b8" },
+            }}
+          >
+            {isSaving ? "Saving..." : "Save"}
           </Button>
         </DialogActions>
       </Dialog>

@@ -9,23 +9,25 @@ import {
   Box,
   Grid,
   Typography,
+  Chip,
   Divider,
   Paper,
   Avatar,
-  MenuItem,
-  InputLabel,
-  Select,
-  FormControl,
   useMediaQuery,
   Button,
   TextField,
   Tooltip,
   Collapse,
   IconButton,
+  CircularProgress,
 } from "@mui/material";
 import { ArrowForwardRounded } from "@mui/icons-material";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import DeleteIcon from "@mui/icons-material/Delete";
+import ChatBubbleOutlineRoundedIcon from "@mui/icons-material/ChatBubbleOutlineRounded";
+import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
+import AccessTimeRoundedIcon from "@mui/icons-material/AccessTimeRounded";
+import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import { useTheme } from "@mui/material/styles";
 
 import Loader from "../../components/common/Loader";
@@ -48,6 +50,7 @@ import { useGetUsers } from "@/hooks/user";
 import { useCreateTicketActivity } from "@/hooks/ticketActivities";
 import { Utility } from "@/utils";
 
+import { DropdownComponent } from "../../components/common/DropdownComponent";
 import { User } from "@/types/user";
 import { fetcher } from "@/apis/apiClient";
 import { useGetTicketLogs } from "@/hooks/ticketLogs";
@@ -68,6 +71,19 @@ const employeeStatusObj = [
   { value: "rejected", label: "Rejected" },
   { value: "drop", label: "Drop" },
   { value: "hold", label: "Hold" },
+];
+
+const loanStatusOptions = [
+  { value: "submitted", label: "Submitted" },
+  { value: "under credit review", label: "Under Credit Review" },
+  { value: "login", label: "Login" },
+  { value: "approved", label: "Approved" },
+  { value: "disbursed", label: "Disbursed" },
+  { value: "carry forward", label: "Carry Forward" },
+  { value: "hold", label: "Hold" },
+  { value: "drop", label: "Drop" },
+  { value: "rejected", label: "Rejected" },
+  { value: "relook", label: "Relook" },
 ];
 
 export const getStatusColor = (status: string) => {
@@ -92,6 +108,33 @@ export const getStatusColor = (status: string) => {
     "forwarded by me": { bg: "rgba(38, 198, 218, 0.1)", border: "#26c6da", text: "#006064" },
   };
   return colors[s] || { bg: "rgba(149, 117, 205, 0.1)", border: "#9575cd", text: "#512da8" };
+};
+
+const panelFieldStyles = {
+  '& .MuiOutlinedInput-root': {
+    bgcolor: '#ffffff',
+    borderRadius: '10px',
+    fontSize: { xs: '0.85rem', sm: '0.9rem' },
+    minHeight: '44px',
+    '& fieldset': {
+      borderColor: '#cbd5e1',
+      borderWidth: '1px',
+    },
+    '&:hover fieldset': {
+      borderColor: '#94a3b8',
+    },
+    '&.Mui-focused fieldset': {
+      borderColor: '#3949ab',
+      borderWidth: '2px',
+    },
+  },
+  '& .MuiInputLabel-root': {
+    fontSize: { xs: '0.85rem', sm: '0.9rem' },
+    color: '#475569',
+    '&.Mui-focused': {
+      color: '#3949ab',
+    },
+  },
 };
 
 export interface TicketDetail {
@@ -262,10 +305,43 @@ const MainPage = () => {
 
   // Pending status change — held until user provides mandatory comment
   const [pendingNewStatus, setPendingNewStatus] = useState<string>("");
+  const [carryForwardMonth, setCarryForwardMonth] = useState<string>("");
   const [showStatusCommentBox, setShowStatusCommentBox] = useState<boolean>(false);
   const [statusChangeComment, setStatusChangeComment] = useState<string>("");
   const [statusChangeAttachment, setStatusChangeAttachment] = useState<File | null>(null);
   const [statusChangeAttachmentPreview, setStatusChangeAttachmentPreview] = useState<string>("");
+  const [isSavingStatus, setIsSavingStatus] = useState<boolean>(false);
+  const [isSavingForward, setIsSavingForward] = useState<boolean>(false);
+  const [isSavingApproval, setIsSavingApproval] = useState<boolean>(false);
+  const [isSavingDisbursement, setIsSavingDisbursement] = useState<boolean>(false);
+
+  // Calculate left-over months in the current year for carry forward
+  const remainingMonths = React.useMemo(() => {
+    const monthNames = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+    const now = new Date();
+    const currentMonthIdx = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const upcoming = monthNames.slice(currentMonthIdx + 1).map((m, idx) => ({
+      label: m,
+      value: m,
+      year: currentYear,
+      monthIndex: currentMonthIdx + 1 + idx,
+    }));
+
+    if (upcoming.length === 0) {
+      upcoming.push({
+        label: `January (${currentYear + 1})`,
+        value: "January",
+        year: currentYear + 1,
+        monthIndex: 0,
+      });
+    }
+    return upcoming;
+  }, []);
 
   // Forward-specific comment box state
   const [pendingForwardUser, setPendingForwardUser] = useState<any>(null);
@@ -507,6 +583,18 @@ const MainPage = () => {
     }
   };
 
+  /** Cancels editing expected decision date and restores the previous saved state. */
+  const handleCancelExpectedDecisionDate = () => {
+    if (ticketDetailData?.due_date) {
+      setExpectedDecisionDate(
+        new Date(ticketDetailData.due_date).toISOString().split("T")[0]
+      );
+      setIsExpectedDateSaved(true);
+    } else {
+      setExpectedDecisionDate("");
+    }
+  };
+
   /** Guard: returns true if due_date is set, else shows a toast and returns false. */
   const requireExpectedDate = (): boolean => {
     if (!isExpectedDateSaved || !expectedDecisionDate) {
@@ -526,15 +614,21 @@ const MainPage = () => {
     return new Date() > new Date(expectedDecisionDate);
   }, [expectedDecisionDate, isExpectedDateSaved, ticketDetailData?.approved_at]);
 
-  /** Called by the File Status <Select> onChange. Only sets pending state — no API calls yet. */
-  const handleFileStatusChange = (event: React.ChangeEvent<{ value: unknown }>) => {
+  /** Called by the File Status Dropdown onChange. Only sets pending state — no API calls yet. */
+  const handleFileStatusChange = (valOrEvent: string | React.ChangeEvent<{ value: unknown }>) => {
     if (!requireExpectedDate()) return;
-    const newStatus = event.target.value as string;
+    const newStatus = typeof valOrEvent === "string" ? valOrEvent : (valOrEvent.target.value as string);
     setPendingNewStatus(newStatus);
     setShowStatusCommentBox(true);
     setStatusChangeComment("");
     setStatusChangeAttachment(null);
     setStatusChangeAttachmentPreview("");
+
+    if (newStatus === "carry forward" && remainingMonths.length > 0) {
+      setCarryForwardMonth(remainingMonths[0].label);
+    } else {
+      setCarryForwardMonth("");
+    }
 
     // Pre-fill date/amount defaults for approved / disbursed panels
     if (newStatus === "disbursed") {
@@ -555,6 +649,7 @@ const MainPage = () => {
   /** Cancels a pending status change and restores the dropdown to the last saved status. */
   const handleCancelStatusChange = () => {
     setPendingNewStatus("");
+    setCarryForwardMonth("");
     setShowStatusCommentBox(false);
     setStatusChangeComment("");
     setStatusChangeAttachment(null);
@@ -597,6 +692,11 @@ const MainPage = () => {
       toastAndNavigate(dispatch, true, "error", "A comment is required to change the file status");
       return;
     }
+    if (pendingNewStatus === "carry forward" && !carryForwardMonth) {
+      toastAndNavigate(dispatch, true, "error", "Please select a target month to carry forward this ticket");
+      return;
+    }
+    setIsSavingStatus(true);
     const oldStatus = newEmployeeStatus;
     const newStatus = pendingNewStatus;
     try {
@@ -618,18 +718,30 @@ const MainPage = () => {
           return;
         }
       }
-      // 2. Update ticket status
+      // 2. Update ticket status and created_at if carry forward
       const updatePayload: Record<string, unknown> = {
         status: newStatus,
         actorName: decodedToken()?.username || 'A user'
       };
+      if (newStatus === "carry forward") {
+        const selectedTarget = remainingMonths.find(m => m.label === carryForwardMonth);
+        if (selectedTarget) {
+          const pad = (n: number) => String(n).padStart(2, "0");
+          const targetDateStr = `${selectedTarget.year}-${pad(selectedTarget.monthIndex + 1)}-01T00:00:00.000Z`;
+          updatePayload.created_at = targetDateStr;
+        }
+      }
       if (caseType) updatePayload.case_type = caseType;
       await modifyTicket(+ticketId, updatePayload);
       // 3. Ticket history
       const loggedInUser = decodedToken()?.username;
+      const historyAction = newStatus === "carry forward"
+        ? `${loggedInUser} changed File Status from ${oldStatus} to Carry Forward (Target Month: ${carryForwardMonth})`
+        : `${loggedInUser} changed File Status from ${oldStatus} to ${newStatus}`;
+
       await createTicketHistory({
         ticket_id: ticketId,
-        action: `${loggedInUser} changed File Status from ${oldStatus} to ${newStatus}`,
+        action: historyAction,
       });
       // 4. Save mandatory comment to ticket_activities (same table as bottom Comments)
       await createTicketActivity({
@@ -641,6 +753,7 @@ const MainPage = () => {
       // 5. Confirm state
       setNewEmployeeStatus(newStatus);
       setPendingNewStatus("");
+      setCarryForwardMonth("");
       setShowStatusCommentBox(false);
       setStatusChangeComment("");
       setStatusChangeAttachment(null);
@@ -649,6 +762,8 @@ const MainPage = () => {
       await refetch();
     } catch {
       toastAndNavigate(dispatch, true, "error", "Error Changing Status");
+    } finally {
+      setIsSavingStatus(false);
     }
   };
 
@@ -667,6 +782,7 @@ const MainPage = () => {
       toastAndNavigate(dispatch, true, "error", "Please enter a valid disbursement amount");
       return;
     }
+    setIsSavingDisbursement(true);
     try {
       // 1. Optional attachment upload
       let attachmentUrl: string | null = null;
@@ -746,6 +862,8 @@ const MainPage = () => {
       await fetchTicketDetails();
     } catch {
       toastAndNavigate(dispatch, true, "error", "Error saving disbursement details");
+    } finally {
+      setIsSavingDisbursement(false);
     }
   };
 
@@ -764,6 +882,7 @@ const MainPage = () => {
       toastAndNavigate(dispatch, true, "error", "Please enter a valid approval amount");
       return;
     }
+    setIsSavingApproval(true);
     try {
       // 1. Optional attachment upload
       let attachmentUrl: string | null = null;
@@ -827,13 +946,16 @@ const MainPage = () => {
       await fetchTicketDetails();
     } catch {
       toastAndNavigate(dispatch, true, "error", "Error saving approval details");
+    } finally {
+      setIsSavingApproval(false);
     }
   };
 
-  const handleChangeLoanStatus = async (event: any) => {
+  const handleChangeLoanStatus = async (valOrEvent: any) => {
     if (!requireExpectedDate()) return;
     const oldStatus = newLoanStatus;
-    const newStatus = event.target.value;
+    const newStatus = typeof valOrEvent === "string" ? valOrEvent : valOrEvent?.target?.value;
+    if (!newStatus) return;
     setNewLoanStatus(newStatus);
 
     try {
@@ -897,6 +1019,7 @@ const MainPage = () => {
       return;
     }
     if (!pendingForwardUser) return;
+    setIsSavingForward(true);
     try {
       const employeeRole = decodedToken()?.role;
       const loggedInUser = decodedToken()?.username;
@@ -961,6 +1084,8 @@ const MainPage = () => {
       await fetchTicketDetails();
     } catch {
       toastAndNavigate(dispatch, true, "error", "Error Forwarding File");
+    } finally {
+      setIsSavingForward(false);
     }
   };
 
@@ -1048,59 +1173,70 @@ const MainPage = () => {
               <Box
                 sx={{
                   mt: 4,
-                  mb: 3,
+                  mb: 2.5,
                   display: 'flex',
                   flexDirection: { xs: 'column', sm: 'row' },
-                  alignItems: 'center',
+                  alignItems: { xs: 'flex-start', sm: 'center' },
                   justifyContent: 'space-between',
-                  borderBottom: '1px solid rgba(0,0,0,0.08)',
-                  pb: 1,
-                  gap: { xs: 2, sm: 0 },
+                  borderBottom: '1px solid #e2e8f0',
+                  pb: 1.5,
+                  gap: { xs: 1.5, sm: 0 },
                 }}
               >
                 <Box
                   sx={{
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
                   }}
                 >
                   <Typography
                     variant="h6"
                     sx={{
-                      color: "#172B4D",
+                      color: "#1e293b",
                       fontWeight: 700,
-                      fontSize: { xs: "1.2rem", md: "1.4rem" },
+                      fontSize: { xs: "1.1rem", md: "1.25rem" },
+                      letterSpacing: "-0.01em",
                     }}
                   >
-                    Activity:
+                    Activity
                   </Typography>
                 </Box>
 
+                {/* Segmented Tab Control */}
                 <Box
                   sx={{
-                    display: "flex",
+                    display: "inline-flex",
                     alignItems: "center",
-                    gap: 1,
+                    bgcolor: "#f1f5f9",
+                    p: "3px",
+                    borderRadius: "8px",
+                    border: "1px solid #e2e8f0",
+                    gap: "2px",
                   }}
                 >
                   <Tooltip title="View comments and updates">
                     <Button
-                      variant={activeSection === "Comments" ? "contained" : "outlined"}
+                      size="small"
+                      startIcon={<ChatBubbleOutlineRoundedIcon sx={{ fontSize: "15px !important" }} />}
                       onClick={showComments}
+                      disableRipple
                       sx={{
                         textTransform: "none",
-                        fontWeight: 600,
-                        fontSize: "0.85rem",
-                        borderRadius: "8px",
-                        bgcolor: activeSection === "Comments" ? "#155fcc" : "transparent",
-                        color: activeSection === "Comments" ? "white" : "#5E6C84",
-                        borderColor: activeSection === "Comments" ? "#155fcc" : "#dfe1e6",
-                        boxShadow: "none",
+                        fontWeight: activeSection === "Comments" ? 700 : 500,
+                        fontSize: "0.8rem",
+                        borderRadius: "6px",
+                        px: 1.6,
+                        py: 0.45,
+                        bgcolor: activeSection === "Comments" ? "#ffffff" : "transparent",
+                        color: activeSection === "Comments" ? "#3949ab" : "#64748b",
+                        boxShadow: activeSection === "Comments" ? "0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)" : "none",
+                        border: activeSection === "Comments" ? "1px solid rgba(0,0,0,0.04)" : "1px solid transparent",
+                        transition: "all 0.15s ease",
                         "&:hover": {
-                          boxShadow: "none",
-                          bgcolor: activeSection === "Comments" ? "#104da8" : "rgba(9, 30, 66, 0.04)",
-                        }
+                          bgcolor: activeSection === "Comments" ? "#ffffff" : "rgba(255,255,255,0.6)",
+                          color: activeSection === "Comments" ? "#3949ab" : "#0f172a",
+                          boxShadow: activeSection === "Comments" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                        },
                       }}
                     >
                       Comments
@@ -1108,21 +1244,27 @@ const MainPage = () => {
                   </Tooltip>
                   <Tooltip title="View ticket history">
                     <Button
-                      variant={activeSection === "History" ? "contained" : "outlined"}
+                      size="small"
+                      startIcon={<HistoryRoundedIcon sx={{ fontSize: "16px !important" }} />}
                       onClick={showHistory}
+                      disableRipple
                       sx={{
                         textTransform: "none",
-                        fontWeight: 600,
-                        fontSize: "0.85rem",
-                        borderRadius: "8px",
-                        bgcolor: activeSection === "History" ? "#155fcc" : "transparent",
-                        color: activeSection === "History" ? "white" : "#5E6C84",
-                        borderColor: activeSection === "History" ? "#155fcc" : "#dfe1e6",
-                        boxShadow: "none",
+                        fontWeight: activeSection === "History" ? 700 : 500,
+                        fontSize: "0.8rem",
+                        borderRadius: "6px",
+                        px: 1.6,
+                        py: 0.45,
+                        bgcolor: activeSection === "History" ? "#ffffff" : "transparent",
+                        color: activeSection === "History" ? "#3949ab" : "#64748b",
+                        boxShadow: activeSection === "History" ? "0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)" : "none",
+                        border: activeSection === "History" ? "1px solid rgba(0,0,0,0.04)" : "1px solid transparent",
+                        transition: "all 0.15s ease",
                         "&:hover": {
-                          boxShadow: "none",
-                          bgcolor: activeSection === "History" ? "#104da8" : "rgba(9, 30, 66, 0.04)",
-                        }
+                          bgcolor: activeSection === "History" ? "#ffffff" : "rgba(255,255,255,0.6)",
+                          color: activeSection === "History" ? "#3949ab" : "#0f172a",
+                          boxShadow: activeSection === "History" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                        },
                       }}
                     >
                       History
@@ -1130,21 +1272,27 @@ const MainPage = () => {
                   </Tooltip>
                   <Tooltip title="View operational work logs">
                     <Button
-                      variant={activeSection === "WorkLog" ? "contained" : "outlined"}
+                      size="small"
+                      startIcon={<AccessTimeRoundedIcon sx={{ fontSize: "15px !important" }} />}
                       onClick={showWorkLog}
+                      disableRipple
                       sx={{
                         textTransform: "none",
-                        fontWeight: 600,
-                        fontSize: "0.85rem",
-                        borderRadius: "8px",
-                        bgcolor: activeSection === "WorkLog" ? "#155fcc" : "transparent",
-                        color: activeSection === "WorkLog" ? "white" : "#5E6C84",
-                        borderColor: activeSection === "WorkLog" ? "#155fcc" : "#dfe1e6",
-                        boxShadow: "none",
+                        fontWeight: activeSection === "WorkLog" ? 700 : 500,
+                        fontSize: "0.8rem",
+                        borderRadius: "6px",
+                        px: 1.6,
+                        py: 0.45,
+                        bgcolor: activeSection === "WorkLog" ? "#ffffff" : "transparent",
+                        color: activeSection === "WorkLog" ? "#3949ab" : "#64748b",
+                        boxShadow: activeSection === "WorkLog" ? "0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)" : "none",
+                        border: activeSection === "WorkLog" ? "1px solid rgba(0,0,0,0.04)" : "1px solid transparent",
+                        transition: "all 0.15s ease",
                         "&:hover": {
-                          boxShadow: "none",
-                          bgcolor: activeSection === "WorkLog" ? "#104da8" : "rgba(9, 30, 66, 0.04)",
-                        }
+                          bgcolor: activeSection === "WorkLog" ? "#ffffff" : "rgba(255,255,255,0.6)",
+                          color: activeSection === "WorkLog" ? "#3949ab" : "#0f172a",
+                          boxShadow: activeSection === "WorkLog" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                        },
                       }}
                     >
                       Work Log
@@ -1265,15 +1413,26 @@ const MainPage = () => {
                   {isExpectedDateSaved && (
                     <Button
                       size="small"
-                      variant="text"
+                      variant="outlined"
+                      startIcon={<EditRoundedIcon sx={{ fontSize: '13px !important' }} />}
                       onClick={() => setIsExpectedDateSaved(false)}
                       sx={{
-                        fontSize: '0.68rem',
-                        color: isExpectedDateOverdue ? 'error.main' : '#155fcc',
+                        fontSize: '0.72rem',
+                        fontWeight: 600,
+                        color: '#1e293b',
+                        borderColor: '#cbd5e1',
+                        bgcolor: '#ffffff',
                         textTransform: 'none',
+                        borderRadius: '5px',
+                        px: 1.2,
+                        py: 0.25,
                         minWidth: 0,
-                        p: '2px 6px',
-                        '&:hover': { bgcolor: 'rgba(21,95,204,0.08)' },
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                        '&:hover': {
+                          bgcolor: '#f8fafc',
+                          borderColor: '#3949ab',
+                          color: '#3949ab',
+                        },
                       }}
                     >
                       Edit
@@ -1316,27 +1475,56 @@ const MainPage = () => {
                       inputProps={{ min: new Date().toISOString().split('T')[0] }}
                       sx={{
                         flex: 1,
+                        minWidth: '130px',
                         '& .MuiOutlinedInput-root': {
                           bgcolor: '#fff',
-                          fontSize: '0.85rem',
+                          fontSize: '0.82rem',
                           borderRadius: 1.5,
                         },
                       }}
                       InputLabelProps={{ shrink: true }}
                     />
+                    {ticketDetailData?.due_date && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={handleCancelExpectedDecisionDate}
+                        sx={{
+                          fontSize: '0.78rem',
+                          fontWeight: 600,
+                          textTransform: 'none',
+                          color: '#64748b',
+                          borderColor: '#cbd5e1',
+                          bgcolor: '#ffffff',
+                          borderRadius: '6px',
+                          px: 1.6,
+                          py: 0.45,
+                          '&:hover': {
+                            bgcolor: '#f1f5f9',
+                            borderColor: '#94a3b8',
+                            color: '#0f172a',
+                          },
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    )}
                     <Button
                       size="small"
                       variant="contained"
                       disabled={!expectedDecisionDate || isSavingExpectedDate}
                       onClick={handleSaveExpectedDecisionDate}
                       sx={{
-                        bgcolor: '#155fcc',
-                        fontSize: '0.75rem',
+                        bgcolor: '#3949ab',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
                         textTransform: 'none',
-                        borderRadius: 1.5,
-                        px: 2,
-                        '&:hover': { bgcolor: '#104da8' },
-                        '&:disabled': { bgcolor: '#ccc', color: '#666' },
+                        borderRadius: '6px',
+                        px: 1.8,
+                        py: 0.45,
+                        boxShadow: 'none',
+                        '&:hover': { bgcolor: '#303f9f', boxShadow: 'none' },
+                        '&:disabled': { bgcolor: '#cbd5e1', color: '#94a3b8' },
                       }}
                     >
                       {isSavingExpectedDate ? 'Saving...' : 'Save'}
@@ -1349,7 +1537,7 @@ const MainPage = () => {
                     variant="caption"
                     sx={{ color: '#e65100', fontSize: '0.7rem', fontStyle: 'italic' }}
                   >
-                    Required before any activity (commenting, status change, time logging)
+                    Required before any activity (commenting, status change)
                   </Typography>
                 )}
               </Box>
@@ -1359,25 +1547,23 @@ const MainPage = () => {
                 <Tooltip title="Forward this ticket to another user">
                   <span>
                     <Button
-                      color="info"
-                      endIcon={<ArrowForwardRounded />}
-                      size={isMobile ? "small" : "medium"}
+                      endIcon={<ArrowForwardRounded sx={{ fontSize: '16px !important' }} />}
+                      size="small"
                       variant="contained"
                       onClick={() => setNewEmployeeStatus("forwarded")}
                       sx={{
-                        bgcolor: '#155fcc',
-                        textTransform: 'uppercase',
-                        borderRadius: { xs: 1.5, sm: 2 },
-                        py: { xs: 1, sm: 1.5, md: 1 },
-                        px: { xs: 1, sm: 2 },
-                        fontSize: {
-                          xs: '0.75rem',
-                          sm: '0.8rem',
-                          md: '0.85rem'
-                        },
-                        minHeight: { xs: '36px', sm: '42px' },
+                        bgcolor: '#3949ab',
+                        color: '#ffffff',
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        borderRadius: '6px',
+                        py: 0.45,
+                        px: 1.8,
+                        fontSize: '0.8rem',
+                        boxShadow: 'none',
                         '&:hover': {
-                          bgcolor: '#1248a8',
+                          bgcolor: '#303f9f',
+                          boxShadow: '0 2px 4px rgba(57, 73, 171, 0.2)',
                         },
                       }}
                     >
@@ -1486,23 +1672,44 @@ const MainPage = () => {
                       size="small"
                       variant="outlined"
                       onClick={handleCancelForward}
-                      sx={{ fontSize: { xs: '0.75rem', sm: '0.8rem' } }}
+                      sx={{
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        textTransform: 'none',
+                        color: '#64748b',
+                        borderColor: '#cbd5e1',
+                        borderRadius: '6px',
+                        px: 1.8,
+                        py: 0.4,
+                        '&:hover': {
+                          bgcolor: '#f1f5f9',
+                          borderColor: '#94a3b8',
+                          color: '#0f172a',
+                        },
+                      }}
                     >
                       Cancel
                     </Button>
                     <Button
                       size="small"
                       variant="contained"
-                      disabled={!forwardComment.trim()}
+                      disabled={!forwardComment.trim() || isSavingForward}
                       onClick={handleConfirmForward}
+                      startIcon={isSavingForward ? <CircularProgress size={14} color="inherit" /> : null}
                       sx={{
-                        bgcolor: '#155fcc',
-                        fontSize: { xs: '0.75rem', sm: '0.8rem' },
-                        '&:hover': { bgcolor: '#104da8' },
-                        '&:disabled': { bgcolor: '#ccc', color: '#666' },
+                        bgcolor: '#3949ab',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        textTransform: 'none',
+                        borderRadius: '6px',
+                        px: 1.8,
+                        py: 0.4,
+                        boxShadow: 'none',
+                        '&:hover': { bgcolor: '#303f9f', boxShadow: 'none' },
+                        '&:disabled': { bgcolor: '#cbd5e1', color: '#94a3b8' },
                       }}
                     >
-                      Forward
+                      {isSavingForward ? "Forwarding..." : "Forward"}
                     </Button>
                   </Box>
                 </Box>
@@ -1546,76 +1753,15 @@ const MainPage = () => {
                         File Status:
                       </Typography>
 
-                      <FormControl
-                        variant="filled"
-                        fullWidth
-                        size={isMobile ? "small" : "medium"}
-                        sx={{
-                          bgcolor: 'white',
-                          borderRadius: { xs: 1.5, sm: 2 },
-                          '& .MuiFilledInput-root': {
-                            fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                            minHeight: { xs: '48px', sm: '56px' },
-                            paddingTop: { xs: '24px', sm: '.4rem' },
-                          },
-                          '& .MuiInputLabel-root': {
-                            fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                            transform: isMobile ? 'translate(12px, 8px) scale(1)' : 'translate(12px, 10px) scale(1)',
-                            top: { xs: '-4px', sm: '-2px' },
-                          },
-                          '& .MuiInputLabel-shrink': {
-                            transform: isMobile ? 'translate(12px, 2px) scale(0.75)' : 'translate(12px, 4px) scale(0.75)',
-                            top: 0,
-                          },
-                          '& .MuiFilledInput-input': {
-                            paddingTop: { xs: '8px', sm: '12px' },
-                            paddingBottom: { xs: '8px', sm: '12px' },
-                          },
-                          '& .MuiSelect-select': {
-                            paddingTop: { xs: '8px', sm: '12px' } + ' !important',
-                            paddingBottom: { xs: '8px', sm: '12px' } + ' !important',
-                          },
-                          '& .MuiFilledInput-underline:before': {
-                            borderBottom: 'none',
-                          },
-                          '& .MuiFilledInput-underline:after': {
-                            borderBottom: 'none',
-                          },
-                          '& .MuiFilledInput-underline:hover:before': {
-                            borderBottom: 'none !important',
-                          },
-                        }}
-                      >
-                        <InputLabel>File Status</InputLabel>
-                        <Select
-                          value={pendingNewStatus || newEmployeeStatus}
-                          onChange={handleFileStatusChange}
-                          sx={{
-                            borderRadius: 1,
-                            '& .MuiSelect-select': {
-                              fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                              py: { xs: 1, sm: 1.5 },
-                            }
-                          }}
-                          MenuProps={{
-                            PaperProps: {
-                              sx: {
-                                maxHeight: 200,
-                                '& .MuiMenuItem-root': {
-                                  fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                                  minHeight: { xs: '36px', sm: '48px' },
-                                }
-                              }
-                            }
-                          }}
-                        >
-                          {employeeStatusObj.map((status) => (
-                            <MenuItem key={status.value} value={status.value}>
-                              {status.label}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
+                      <DropdownComponent
+                        id="ticket-file-status"
+                        name="fileStatus"
+                        label="File Status"
+                        value={pendingNewStatus || newEmployeeStatus}
+                        onChange={handleFileStatusChange}
+                        options={employeeStatusObj}
+                        placeholder="Select File Status"
+                      />
                     </Box>
                   )}
 
@@ -1638,6 +1784,26 @@ const MainPage = () => {
                         transition: 'all 0.3s ease',
                       }}
                     >
+                      {/* Carry Forward Target Month Selector */}
+                      {pendingNewStatus === "carry forward" && (
+                        <Box sx={{ mt: 0.5, mb: 1 }}>
+                          <DropdownComponent
+                            id="ticket-carry-forward-month"
+                            name="carryForwardMonth"
+                            label={
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <span>Move To Month</span>
+                                <Typography component="span" sx={{ color: '#d32f2f', fontWeight: 'bold' }}>*</Typography>
+                              </Box>
+                            }
+                            value={carryForwardMonth}
+                            onChange={(val) => setCarryForwardMonth(val)}
+                            options={remainingMonths.map((m) => ({ label: m.label, value: m.label }))}
+                            placeholder="Select Target Month"
+                          />
+                        </Box>
+                      )}
+
                       <Typography
                         variant="subtitle2"
                         sx={{ fontWeight: 700, color: 'text.primary', fontSize: { xs: '0.8rem', sm: '0.9rem' } }}
@@ -1700,23 +1866,44 @@ const MainPage = () => {
                           size="small"
                           variant="outlined"
                           onClick={handleCancelStatusChange}
-                          sx={{ fontSize: { xs: '0.75rem', sm: '0.8rem' } }}
+                          sx={{
+                            fontSize: '0.78rem',
+                            fontWeight: 600,
+                            textTransform: 'none',
+                            color: '#64748b',
+                            borderColor: '#cbd5e1',
+                            borderRadius: '6px',
+                            px: 1.8,
+                            py: 0.4,
+                            '&:hover': {
+                              bgcolor: '#f1f5f9',
+                              borderColor: '#94a3b8',
+                              color: '#0f172a',
+                            },
+                          }}
                         >
                           Cancel
                         </Button>
                         <Button
                           size="small"
                           variant="contained"
-                          disabled={!statusChangeComment.trim()}
+                          disabled={!statusChangeComment.trim() || (pendingNewStatus === "carry forward" && !carryForwardMonth) || isSavingStatus}
                           onClick={handleConfirmStatusChange}
+                          startIcon={isSavingStatus ? <CircularProgress size={14} color="inherit" /> : null}
                           sx={{
-                            bgcolor: '#155fcc',
-                            fontSize: { xs: '0.75rem', sm: '0.8rem' },
-                            '&:hover': { bgcolor: '#104da8' },
-                            '&:disabled': { bgcolor: '#ccc', color: '#666' },
+                            bgcolor: '#3949ab',
+                            fontSize: '0.78rem',
+                            fontWeight: 600,
+                            textTransform: 'none',
+                            borderRadius: '6px',
+                            px: 1.8,
+                            py: 0.4,
+                            boxShadow: 'none',
+                            '&:hover': { bgcolor: '#303f9f', boxShadow: 'none' },
+                            '&:disabled': { bgcolor: '#cbd5e1', color: '#94a3b8' },
                           }}
                         >
-                          Save Status
+                          {isSavingStatus ? "Saving..." : "Save"}
                         </Button>
                       </Box>
                     </Box>
@@ -1762,35 +1949,10 @@ const MainPage = () => {
                         label="Date"
                         value={approvedDate}
                         onChange={(e) => setApprovedDate(e.target.value)}
-                        variant="filled"
+                        variant="outlined"
+                        size="small"
                         InputLabelProps={{ shrink: true }}
-                        sx={{
-                          bgcolor: 'white',
-                          borderRadius: { xs: 1.5, sm: 2 },
-                          '& .MuiFilledInput-root': {
-                            fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                            minHeight: { xs: '48px', sm: '56px' },
-                            paddingTop: { xs: '24px', sm: '.4rem' },
-                          },
-                          '& .MuiInputLabel-root': {
-                            fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                            transform: 'translate(12px, 10px) scale(1)',
-                          },
-                          '& .MuiInputLabel-shrink': {
-                            transform: 'translate(12px, 4px) scale(0.75)',
-                            top: 0,
-                          },
-                          '& .MuiFilledInput-input': {
-                            paddingTop: { xs: '8px', sm: '12px' },
-                            paddingBottom: { xs: '8px', sm: '12px' },
-                          },
-                          '& .MuiFilledInput-underline:before, & .MuiFilledInput-underline:after': {
-                            borderBottom: 'none',
-                          },
-                          '& .MuiFilledInput-underline:hover:before': {
-                            borderBottom: 'none !important',
-                          },
-                        }}
+                        sx={panelFieldStyles}
                       />
 
                       {/* Amount Field */}
@@ -1811,77 +1973,25 @@ const MainPage = () => {
                             setApprovedAmount(formatted);
                           }
                         }}
-                        variant="filled"
+                        variant="outlined"
+                        size="small"
                         InputLabelProps={{ shrink: true }}
-                        sx={{
-                          bgcolor: 'white',
-                          borderRadius: { xs: 1.5, sm: 2 },
-                          '& .MuiFilledInput-root': {
-                            fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                            minHeight: { xs: '48px', sm: '56px' },
-                            paddingTop: { xs: '24px', sm: '.4rem' },
-                          },
-                          '& .MuiInputLabel-root': {
-                            fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                            transform: 'translate(12px, 10px) scale(1)',
-                          },
-                          '& .MuiInputLabel-shrink': {
-                            transform: 'translate(12px, 4px) scale(0.75)',
-                            top: 0,
-                          },
-                          '& .MuiFilledInput-input': {
-                            paddingTop: { xs: '8px', sm: '12px' },
-                            paddingBottom: { xs: '8px', sm: '12px' },
-                          },
-                          '& .MuiFilledInput-underline:before, & .MuiFilledInput-underline:after': {
-                            borderBottom: 'none',
-                          },
-                          '& .MuiFilledInput-underline:hover:before': {
-                            borderBottom: 'none !important',
-                          },
-                        }}
+                        sx={panelFieldStyles}
                       />
 
                       {/* Case Type Field */}
-                      <TextField
-                        select
-                        fullWidth
+                      <DropdownComponent
+                        id="approval-case-type"
+                        name="caseType"
                         label="Case Type"
                         value={caseType}
-                        onChange={(e) => setCaseType(e.target.value)}
-                        variant="filled"
-                        InputLabelProps={{ shrink: true }}
-                        sx={{
-                          bgcolor: 'white',
-                          borderRadius: { xs: 1.5, sm: 2 },
-                          '& .MuiFilledInput-root': {
-                            fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                            minHeight: { xs: '48px', sm: '56px' },
-                            paddingTop: { xs: '24px', sm: '.4rem' },
-                          },
-                          '& .MuiInputLabel-root': {
-                            fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                            transform: 'translate(12px, 10px) scale(1)',
-                          },
-                          '& .MuiInputLabel-shrink': {
-                            transform: 'translate(12px, 4px) scale(0.75)',
-                            top: 0,
-                          },
-                          '& .MuiFilledInput-input': {
-                            paddingTop: { xs: '8px', sm: '12px' },
-                            paddingBottom: { xs: '8px', sm: '12px' },
-                          },
-                          '& .MuiFilledInput-underline:before, & .MuiFilledInput-underline:after': {
-                            borderBottom: 'none',
-                          },
-                          '& .MuiFilledInput-underline:hover:before': {
-                            borderBottom: 'none !important',
-                          },
-                        }}
-                      >
-                        <MenuItem value="fresh">Fresh</MenuItem>
-                        <MenuItem value="top_up">Top up</MenuItem>
-                      </TextField>
+                        onChange={(val) => setCaseType(val)}
+                        options={[
+                          { value: "fresh", label: "Fresh" },
+                          { value: "top_up", label: "Top up" },
+                        ]}
+                        placeholder="Select Case Type"
+                      />
 
                       {/* Fixed Commission Percentage Field */}
                       <TextField
@@ -1891,35 +2001,10 @@ const MainPage = () => {
                         placeholder="Enter fixed commission percentage"
                         value={fixedCommissionPercentage}
                         onChange={(e) => setFixedCommissionPercentage(e.target.value)}
-                        variant="filled"
+                        variant="outlined"
+                        size="small"
                         InputLabelProps={{ shrink: true }}
-                        sx={{
-                          bgcolor: 'white',
-                          borderRadius: { xs: 1.5, sm: 2 },
-                          '& .MuiFilledInput-root': {
-                            fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                            minHeight: { xs: '48px', sm: '56px' },
-                            paddingTop: { xs: '24px', sm: '.4rem' },
-                          },
-                          '& .MuiInputLabel-root': {
-                            fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                            transform: 'translate(12px, 10px) scale(1)',
-                          },
-                          '& .MuiInputLabel-shrink': {
-                            transform: 'translate(12px, 4px) scale(0.75)',
-                            top: 0,
-                          },
-                          '& .MuiFilledInput-input': {
-                            paddingTop: { xs: '8px', sm: '12px' },
-                            paddingBottom: { xs: '8px', sm: '12px' },
-                          },
-                          '& .MuiFilledInput-underline:before, & .MuiFilledInput-underline:after': {
-                            borderBottom: 'none',
-                          },
-                          '& .MuiFilledInput-underline:hover:before': {
-                            borderBottom: 'none !important',
-                          },
-                        }}
+                        sx={panelFieldStyles}
                       />
 
                       {/* Mandatory comment box — inside approved panel */}
@@ -1935,7 +2020,13 @@ const MainPage = () => {
                           size="small"
                           label="Comment (required)"
                           InputLabelProps={{ shrink: true }}
-                          sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#fff', pr: '40px' } }}
+                          sx={{
+                            ...panelFieldStyles,
+                            '& .MuiOutlinedInput-root': {
+                              ...panelFieldStyles['& .MuiOutlinedInput-root'],
+                              pr: '40px',
+                            },
+                          }}
                         />
                         <Tooltip title="Add attachment">
                           <IconButton
@@ -1977,7 +2068,21 @@ const MainPage = () => {
                           size="small"
                           variant="outlined"
                           onClick={handleCancelStatusChange}
-                          sx={{ fontSize: { xs: '0.75rem', sm: '0.8rem' } }}
+                          sx={{
+                            fontSize: '0.78rem',
+                            fontWeight: 600,
+                            textTransform: 'none',
+                            color: '#64748b',
+                            borderColor: '#cbd5e1',
+                            borderRadius: '6px',
+                            px: 1.8,
+                            py: 0.4,
+                            '&:hover': {
+                              bgcolor: '#f1f5f9',
+                              borderColor: '#94a3b8',
+                              color: '#0f172a',
+                            },
+                          }}
                         >
                           Cancel
                         </Button>
@@ -1985,25 +2090,31 @@ const MainPage = () => {
                           <span>
                             <Button
                               variant="contained"
-                              size="medium"
+                              size="small"
                               onClick={handleCombinedApprovalSubmit}
                               disabled={
+                                isSavingApproval ||
                                 !statusChangeComment.trim() ||
                                 !approvedDate ||
                                 !(approvedAmount || ticketDetailData?.applicationAmount) ||
                                 parseFloat(approvedAmount || ticketDetailData?.applicationAmount || 0) <= 0
                               }
+                              startIcon={isSavingApproval ? <CircularProgress size={14} color="inherit" /> : null}
                               sx={{
-                                bgcolor: "primary.main",
-                                fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                                borderRadius: { xs: 1.5, sm: 2 },
-                                px: { xs: 2, sm: 4 },
-                                py: { xs: 0.8, sm: 1.2 },
-                                '&:hover': { bgcolor: "primary.dark" },
-                                '&:disabled': { bgcolor: "#ccc", color: "#666" },
+                                bgcolor: '#3949ab',
+                                color: '#ffffff',
+                                fontSize: '0.78rem',
+                                fontWeight: 600,
+                                textTransform: 'none',
+                                borderRadius: '6px',
+                                px: 2,
+                                py: 0.45,
+                                boxShadow: 'none',
+                                '&:hover': { bgcolor: '#303f9f', boxShadow: 'none' },
+                                '&:disabled': { bgcolor: '#cbd5e1', color: '#94a3b8' },
                               }}
                             >
-                              Save Details
+                              {isSavingApproval ? "Saving..." : "Save"}
                             </Button>
                           </span>
                         </Tooltip>
@@ -2051,35 +2162,10 @@ const MainPage = () => {
                         label="Date"
                         value={disbursedDate}
                         onChange={(e) => setDisbursedDate(e.target.value)}
-                        variant="filled"
+                        variant="outlined"
+                        size="small"
                         InputLabelProps={{ shrink: true }}
-                        sx={{
-                          bgcolor: 'white',
-                          borderRadius: { xs: 1.5, sm: 2 },
-                          '& .MuiFilledInput-root': {
-                            fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                            minHeight: { xs: '48px', sm: '56px' },
-                            paddingTop: { xs: '24px', sm: '.4rem' },
-                          },
-                          '& .MuiInputLabel-root': {
-                            fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                            transform: 'translate(12px, 10px) scale(1)',
-                          },
-                          '& .MuiInputLabel-shrink': {
-                            transform: 'translate(12px, 4px) scale(0.75)',
-                            top: 0,
-                          },
-                          '& .MuiFilledInput-input': {
-                            paddingTop: { xs: '8px', sm: '12px' },
-                            paddingBottom: { xs: '8px', sm: '12px' },
-                          },
-                          '& .MuiFilledInput-underline:before, & .MuiFilledInput-underline:after': {
-                            borderBottom: 'none',
-                          },
-                          '& .MuiFilledInput-underline:hover:before': {
-                            borderBottom: 'none !important',
-                          },
-                        }}
+                        sx={panelFieldStyles}
                       />
 
                       {/* Amount Field */}
@@ -2090,35 +2176,10 @@ const MainPage = () => {
                         placeholder="Enter amount"
                         value={disbursedAmount}
                         onChange={(e) => setDisbursedAmount(e.target.value)}
-                        variant="filled"
+                        variant="outlined"
+                        size="small"
                         InputLabelProps={{ shrink: true }}
-                        sx={{
-                          bgcolor: 'white',
-                          borderRadius: { xs: 1.5, sm: 2 },
-                          '& .MuiFilledInput-root': {
-                            fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                            minHeight: { xs: '48px', sm: '56px' },
-                            paddingTop: { xs: '24px', sm: '.4rem' },
-                          },
-                          '& .MuiInputLabel-root': {
-                            fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                            transform: 'translate(12px, 10px) scale(1)',
-                          },
-                          '& .MuiInputLabel-shrink': {
-                            transform: 'translate(12px, 4px) scale(0.75)',
-                            top: 0,
-                          },
-                          '& .MuiFilledInput-input': {
-                            paddingTop: { xs: '8px', sm: '12px' },
-                            paddingBottom: { xs: '8px', sm: '12px' },
-                          },
-                          '& .MuiFilledInput-underline:before, & .MuiFilledInput-underline:after': {
-                            borderBottom: 'none',
-                          },
-                          '& .MuiFilledInput-underline:hover:before': {
-                            borderBottom: 'none !important',
-                          },
-                        }}
+                        sx={panelFieldStyles}
                       />
                       {/* Add Cashback Field Here */}
                       <TextField
@@ -2128,78 +2189,25 @@ const MainPage = () => {
                         placeholder="Enter cashback amount"
                         value={cashbackAmount}
                         onChange={(e) => setCashbackAmount(e.target.value)}
-                        variant="filled"
+                        variant="outlined"
+                        size="small"
                         InputLabelProps={{ shrink: true }}
-                        sx={{
-                          bgcolor: 'white',
-                          borderRadius: { xs: 1.5, sm: 2 },
-                          '& .MuiFilledInput-root': {
-                            fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                            minHeight: { xs: '48px', sm: '56px' },
-                            paddingTop: { xs: '24px', sm: '.4rem' },
-                          },
-                          '& .MuiInputLabel-root': {
-                            fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                            transform: 'translate(12px, 10px) scale(1)',
-                          },
-                          '& .MuiInputLabel-shrink': {
-                            transform: 'translate(12px, 4px) scale(0.75)',
-                            top: 0,
-                          },
-                          '& .MuiFilledInput-input': {
-                            paddingTop: { xs: '8px', sm: '12px' },
-                            paddingBottom: { xs: '8px', sm: '12px' },
-                          },
-                          '& .MuiFilledInput-underline:before, & .MuiFilledInput-underline:after': {
-                            borderBottom: 'none',
-                          },
-                          '& .MuiFilledInput-underline:hover:before': {
-                            borderBottom: 'none !important',
-                          },
-                        }}
+                        sx={panelFieldStyles}
                       />
 
                       {/* Case Type Field */}
-                      <TextField
-                        select
-                        fullWidth
+                      <DropdownComponent
+                        id="disbursement-case-type"
+                        name="caseType"
                         label="Case Type"
-                        placeholder="Case type"
                         value={caseType}
-                        onChange={(e) => setCaseType(e.target.value)}
-                        variant="filled"
-                        InputLabelProps={{ shrink: true }}
-                        sx={{
-                          bgcolor: 'white',
-                          borderRadius: { xs: 1.5, sm: 2 },
-                          '& .MuiFilledInput-root': {
-                            fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                            minHeight: { xs: '48px', sm: '56px' },
-                            paddingTop: { xs: '24px', sm: '.4rem' },
-                          },
-                          '& .MuiInputLabel-root': {
-                            fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                            transform: 'translate(12px, 10px) scale(1)',
-                          },
-                          '& .MuiInputLabel-shrink': {
-                            transform: 'translate(12px, 4px) scale(0.75)',
-                            top: 0,
-                          },
-                          '& .MuiFilledInput-input': {
-                            paddingTop: { xs: '8px', sm: '12px' },
-                            paddingBottom: { xs: '8px', sm: '12px' },
-                          },
-                          '& .MuiFilledInput-underline:before, & .MuiFilledInput-underline:after': {
-                            borderBottom: 'none',
-                          },
-                          '& .MuiFilledInput-underline:hover:before': {
-                            borderBottom: 'none !important',
-                          },
-                        }}
-                      >
-                        <MenuItem value="fresh">Fresh</MenuItem>
-                        <MenuItem value="top_up">Top up</MenuItem>
-                      </TextField>
+                        onChange={(val) => setCaseType(val)}
+                        options={[
+                          { value: "fresh", label: "Fresh" },
+                          { value: "top_up", label: "Top up" },
+                        ]}
+                        placeholder="Select Case Type"
+                      />
 
                       {/* Fixed Commission Percentage Field */}
                       <TextField
@@ -2209,37 +2217,11 @@ const MainPage = () => {
                         placeholder="Enter fixed commission percentage"
                         value={fixedCommissionPercentage}
                         onChange={(e) => setFixedCommissionPercentage(e.target.value)}
-                        variant="filled"
+                        variant="outlined"
+                        size="small"
                         InputLabelProps={{ shrink: true }}
-                        sx={{
-                          bgcolor: 'white',
-                          borderRadius: { xs: 1.5, sm: 2 },
-                          '& .MuiFilledInput-root': {
-                            fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                            minHeight: { xs: '48px', sm: '56px' },
-                            paddingTop: { xs: '24px', sm: '.4rem' },
-                          },
-                          '& .MuiInputLabel-root': {
-                            fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                            transform: 'translate(12px, 10px) scale(1)',
-                          },
-                          '& .MuiInputLabel-shrink': {
-                            transform: 'translate(12px, 4px) scale(0.75)',
-                            top: 0,
-                          },
-                          '& .MuiFilledInput-input': {
-                            paddingTop: { xs: '8px', sm: '12px' },
-                            paddingBottom: { xs: '8px', sm: '12px' },
-                          },
-                          '& .MuiFilledInput-underline:before, & .MuiFilledInput-underline:after': {
-                            borderBottom: 'none',
-                          },
-                          '& .MuiFilledInput-underline:hover:before': {
-                            borderBottom: 'none !important',
-                          },
-                        }}
+                        sx={panelFieldStyles}
                       />
-
 
                       {/* Mandatory comment box — inside disbursed panel */}
                       <Box sx={{ position: 'relative' }}>
@@ -2254,7 +2236,13 @@ const MainPage = () => {
                           size="small"
                           label="Comment (required)"
                           InputLabelProps={{ shrink: true }}
-                          sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#fff', pr: '40px' } }}
+                          sx={{
+                            ...panelFieldStyles,
+                            '& .MuiOutlinedInput-root': {
+                              ...panelFieldStyles['& .MuiOutlinedInput-root'],
+                              pr: '40px',
+                            },
+                          }}
                         />
                         <Tooltip title="Add attachment">
                           <IconButton
@@ -2296,7 +2284,21 @@ const MainPage = () => {
                           size="small"
                           variant="outlined"
                           onClick={handleCancelStatusChange}
-                          sx={{ fontSize: { xs: '0.75rem', sm: '0.8rem' } }}
+                          sx={{
+                            fontSize: '0.78rem',
+                            fontWeight: 600,
+                            textTransform: 'none',
+                            color: '#64748b',
+                            borderColor: '#cbd5e1',
+                            borderRadius: '6px',
+                            px: 1.8,
+                            py: 0.4,
+                            '&:hover': {
+                              bgcolor: '#f1f5f9',
+                              borderColor: '#94a3b8',
+                              color: '#0f172a',
+                            },
+                          }}
                         >
                           Cancel
                         </Button>
@@ -2304,25 +2306,31 @@ const MainPage = () => {
                           <span>
                             <Button
                               variant="contained"
-                              size="medium"
+                              size="small"
                               onClick={handleCombinedDisbursementSubmit}
                               disabled={
+                                isSavingDisbursement ||
                                 !statusChangeComment.trim() ||
                                 !disbursedDate ||
                                 !(disbursedAmount || ticketDetailData?.applicationAmount) ||
                                 parseFloat(disbursedAmount || ticketDetailData?.applicationAmount || 0) <= 0
                               }
+                              startIcon={isSavingDisbursement ? <CircularProgress size={14} color="inherit" /> : null}
                               sx={{
-                                bgcolor: "primary.main",
-                                fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                                borderRadius: { xs: 1.5, sm: 2 },
-                                px: { xs: 2, sm: 4 },
-                                py: { xs: 0.8, sm: 1.2 },
-                                '&:hover': { bgcolor: "primary.dark" },
-                                '&:disabled': { bgcolor: "#ccc", color: "#666" },
+                                bgcolor: '#3949ab',
+                                color: '#ffffff',
+                                fontSize: '0.78rem',
+                                fontWeight: 600,
+                                textTransform: 'none',
+                                borderRadius: '6px',
+                                px: 2,
+                                py: 0.45,
+                                boxShadow: 'none',
+                                '&:hover': { bgcolor: '#303f9f', boxShadow: 'none' },
+                                '&:disabled': { bgcolor: '#cbd5e1', color: '#94a3b8' },
                               }}
                             >
-                              Save Details
+                              {isSavingDisbursement ? "Saving..." : "Save"}
                             </Button>
                           </span>
                         </Tooltip>
@@ -2363,71 +2371,15 @@ const MainPage = () => {
                   Loan Status:
                 </Typography>
 
-                <FormControl
-                  variant="filled"
-                  fullWidth
-                  size={isMobile ? "small" : "medium"}
-                  sx={{
-                    bgcolor: 'white',
-                    borderRadius: { xs: 1.5, sm: 2 },
-                    '& .MuiFilledInput-root': {
-                      fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                      minHeight: { xs: '40px', sm: '48px' },
-                      paddingTop: { xs: '24px', sm: '.4rem' },
-                    },
-                    '& .MuiInputLabel-root': {
-                      fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                      transform: isMobile ? 'translate(12px, 12px) scale(1)' : 'translate(12px, 16px) scale(1)',
-                    },
-                    '& .MuiInputLabel-shrink': {
-                      transform: isMobile ? 'translate(12px, 4px) scale(0.75)' : 'translate(12px, 6px) scale(0.75)',
-                    },
-                    '& .MuiFilledInput-underline:before': {
-                      borderBottom: 'none',
-                    },
-                    '& .MuiFilledInput-underline:after': {
-                      borderBottom: 'none',
-                    },
-                    '& .MuiFilledInput-underline:hover:before': {
-                      borderBottom: 'none !important',
-                    },
-                  }}
-                >
-                  <InputLabel>Loan Status</InputLabel>
-                  <Select
-                    value={newLoanStatus}
-                    onChange={handleChangeLoanStatus}
-                    sx={{
-                      borderRadius: 1,
-                      '& .MuiSelect-select': {
-                        fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                        py: { xs: 1, sm: 1.5 },
-                      }
-                    }}
-                    MenuProps={{
-                      PaperProps: {
-                        sx: {
-                          maxHeight: 200,
-                          '& .MuiMenuItem-root': {
-                            fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                            minHeight: { xs: '36px', sm: '48px' },
-                          }
-                        }
-                      }
-                    }}
-                  >
-                    <MenuItem value="submitted">Submitted</MenuItem>
-                    <MenuItem value="under credit review">Under Credit Review</MenuItem>
-                    <MenuItem value="login">Login</MenuItem>
-                    <MenuItem value="approved">Approved</MenuItem>
-                    <MenuItem value="disbursed">Disbursed</MenuItem>
-                    <MenuItem value="carry forward">Carry Forward</MenuItem>
-                    <MenuItem value="hold">Hold</MenuItem>
-                    <MenuItem value="drop">Drop</MenuItem>
-                    <MenuItem value="rejected">Rejected</MenuItem>
-                    <MenuItem value="relook">Relook</MenuItem>
-                  </Select>
-                </FormControl>
+                <DropdownComponent
+                  id="ticket-loan-status"
+                  name="loanStatus"
+                  label="Loan Status"
+                  value={newLoanStatus}
+                  onChange={handleChangeLoanStatus}
+                  options={loanStatusOptions}
+                  placeholder="Select Loan Status"
+                />
               </Box>
 
 

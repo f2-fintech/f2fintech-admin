@@ -20,6 +20,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
+  CircularProgress,
 } from "@mui/material";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -374,7 +375,22 @@ const Comments = ({ storedTicketId, userData, isExpectedDateSaved = true, onRequ
     >
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
         <Typography variant="h6">Excel File Preview</Typography>
-        <Button onClick={onClose} variant="contained" color="error">
+        <Button
+          onClick={onClose}
+          variant="outlined"
+          size="small"
+          sx={{
+            textTransform: "none",
+            fontSize: "0.78rem",
+            fontWeight: 600,
+            color: "#64748b",
+            borderColor: "#cbd5e1",
+            borderRadius: "6px",
+            px: 1.5,
+            py: 0.3,
+            "&:hover": { bgcolor: "#f1f5f9", borderColor: "#94a3b8" },
+          }}
+        >
           Close
         </Button>
       </Box>
@@ -440,16 +456,24 @@ const Comments = ({ storedTicketId, userData, isExpectedDateSaved = true, onRequ
         onClick={handleClick}
         disabled={loading}
         variant="contained"
+        size="small"
         sx={{
           textTransform: "none",
-          bgcolor: "#155fcc",
-          color: "white",
+          fontSize: "0.78rem",
+          fontWeight: 600,
+          borderRadius: "6px",
+          bgcolor: "#3949ab",
+          color: "#ffffff",
+          boxShadow: "none",
+          py: 0.4,
+          px: 1.5,
           "&:hover": {
-            bgcolor: "#",
-            color: "black",
+            bgcolor: "#303f9f",
+            boxShadow: "none",
           },
           "&:disabled": {
-            bgcolor: "#ccc",
+            bgcolor: "#cbd5e1",
+            color: "#94a3b8",
           },
         }}
       >
@@ -536,17 +560,38 @@ const Comments = ({ storedTicketId, userData, isExpectedDateSaved = true, onRequ
         justifyContent="flex-start"
         alignItems="center"
       >
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={handleCreateComment}
-          disabled={isCommenting}
-          sx={{
-            px: 4,
-          }}
-        >
-          {isCommenting ? "Commenting..." : "Comment"}
-        </Button>
+        <Tooltip title={!newComment?.trim() ? "Write text in the above field to comment" : ""}>
+          <span>
+            <Button
+              variant="contained"
+              onClick={handleCreateComment}
+              disabled={isCommenting || !newComment?.trim()}
+              startIcon={isCommenting ? <CircularProgress size={14} color="inherit" /> : null}
+              size="small"
+              sx={{
+                bgcolor: "#3949ab",
+                color: "#ffffff",
+                textTransform: "none",
+                fontWeight: 600,
+                fontSize: "0.8rem",
+                px: 2,
+                py: 0.6,
+                borderRadius: "8px",
+                boxShadow: "none",
+                "&:hover": {
+                  bgcolor: "#303f9f",
+                  boxShadow: "0 2px 4px rgba(57, 73, 171, 0.2)",
+                },
+                "&:disabled": {
+                  bgcolor: "#cbd5e1",
+                  color: "#94a3b8",
+                },
+              }}
+            >
+              {isCommenting ? "Commenting..." : "Comment"}
+            </Button>
+          </span>
+        </Tooltip>
       </Box>
 
       <Box mt={3}>
@@ -628,18 +673,8 @@ const Comments = ({ storedTicketId, userData, isExpectedDateSaved = true, onRequ
                         "MMM dd, yyyy 'at' hh:mm a"
                       )}
                       {comment.updated_at &&
-                        Math.abs(new Date(comment.updated_at).getTime() - new Date(comment.created_at).getTime()) > 1000 && (
-                          <Typography
-                            component="span"
-                            sx={{
-                              fontSize: { xs: "0.65rem", sm: "0.75rem" },
-                              color: "text.secondary",
-                              fontStyle: "italic",
-                            }}
-                          >
-                            (edited)
-                          </Typography>
-                        )}
+                        Math.abs(new Date(comment.updated_at).getTime() - new Date(comment.created_at).getTime()) > 1000
+                      }
                     </Typography>
                   </Box>
 
@@ -664,6 +699,7 @@ const Comments = ({ storedTicketId, userData, isExpectedDateSaved = true, onRequ
                           bgcolor: "#fff",
                           "& .MuiOutlinedInput-root": {
                             backgroundColor: "#fff",
+                            borderRadius: "8px",
                           },
                         }}
                       />
@@ -671,25 +707,31 @@ const Comments = ({ storedTicketId, userData, isExpectedDateSaved = true, onRequ
                         mt={1}
                         sx={{
                           display: "flex",
-                          gap: { xs: 1, sm: 2 },
-                          flexDirection: { xs: "column", sm: "row" },
+                          gap: 1,
                         }}
                       >
                         <Button
                           variant="contained"
-                          color="primary"
+                          size="small"
                           disabled={isSavingComment || !editedComment?.trim()}
+                          startIcon={isSavingComment ? <CircularProgress size={14} color="inherit" /> : null}
                           sx={{
                             color: "white",
-                            bgcolor: "green",
-                            fontSize: {
-                              xs: "0.75rem",
-                              sm: "0.85rem",
-                              md: "0.9rem",
-                            },
-                            py: { xs: 0.5, sm: 1 },
+                            bgcolor: "#3949ab",
+                            fontSize: "0.78rem",
+                            fontWeight: 600,
+                            textTransform: "none",
+                            borderRadius: "6px",
+                            px: 1.8,
+                            py: 0.4,
+                            boxShadow: "none",
                             "&:hover": {
-                              bgcolor: "#1b5e20",
+                              bgcolor: "#303f9f",
+                              boxShadow: "none",
+                            },
+                            "&:disabled": {
+                              bgcolor: "#cbd5e1",
+                              color: "#94a3b8",
                             },
                           }}
                           onClick={() =>
@@ -699,19 +741,22 @@ const Comments = ({ storedTicketId, userData, isExpectedDateSaved = true, onRequ
                           {isSavingComment ? "Saving..." : "Save"}
                         </Button>
                         <Button
-                          variant="contained"
+                          variant="outlined"
+                          size="small"
                           disabled={isSavingComment}
                           sx={{
-                            color: "white",
-                            bgcolor: "#f06292",
-                            fontSize: {
-                              xs: "0.75rem",
-                              sm: "0.85rem",
-                              md: "0.9rem",
-                            },
-                            py: { xs: 0.5, sm: 1 },
+                            color: "#64748b",
+                            borderColor: "#cbd5e1",
+                            fontSize: "0.78rem",
+                            fontWeight: 600,
+                            textTransform: "none",
+                            borderRadius: "6px",
+                            px: 1.8,
+                            py: 0.4,
                             "&:hover": {
-                              bgcolor: "#e91e63",
+                              bgcolor: "#f1f5f9",
+                              borderColor: "#94a3b8",
+                              color: "#0f172a",
                             },
                           }}
                           onClick={handleCancelEdit}
@@ -754,17 +799,26 @@ const Comments = ({ storedTicketId, userData, isExpectedDateSaved = true, onRequ
                           {capitalizeFirstLetter(comment.comment)}
                         </Typography>
                         {comment.attachment && (
-                          <Box>
+                          <Box sx={{ mt: 0.5 }}>
                             <Button
                               onClick={() =>
                                 toggleAttachment(comment.id, comment.attachment)
                               }
-                              variant="contained"
-                              color="primary"
+                              variant="outlined"
+                              size="small"
                               sx={{
-                                py: { xs: 0.5, sm: 1 },
-                                px: { xs: 1, sm: 2 },
-                                minWidth: { xs: "auto", sm: "120px" },
+                                textTransform: "none",
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                                borderRadius: "6px",
+                                borderColor: "#cbd5e1",
+                                color: "#3949ab",
+                                py: 0.35,
+                                px: 1.5,
+                                "&:hover": {
+                                  borderColor: "#3949ab",
+                                  bgcolor: "rgba(57, 73, 171, 0.04)",
+                                },
                               }}
                             >
                               {isExcelAttachment(comment.attachment)
@@ -785,10 +839,10 @@ const Comments = ({ storedTicketId, userData, isExpectedDateSaved = true, onRequ
                                     transform: "translate(-50%, -50%)",
                                     zIndex: 1300,
                                     backgroundColor: "white",
-                                    borderRadius: "8px",
+                                    borderRadius: "12px",
                                     boxShadow:
-                                      "0px 8px 16px rgba(0, 0, 0, 0.2)",
-                                    p: { xs: 1, sm: 2 },
+                                      "0px 8px 24px rgba(0, 0, 0, 0.15)",
+                                    p: { xs: 1.5, sm: 2 },
                                     textAlign: "center",
                                     height: {
                                       xs: "90vh",
@@ -829,11 +883,7 @@ const Comments = ({ storedTicketId, userData, isExpectedDateSaved = true, onRequ
                                       display: "flex",
                                       alignItems: "center",
                                       justifyContent: "center",
-                                      gap: { xs: 1, sm: 2 },
-                                      flexDirection: {
-                                        xs: "column",
-                                        sm: "row",
-                                      },
+                                      gap: 1.5,
                                     }}
                                   >
                                     <Button
@@ -843,20 +893,20 @@ const Comments = ({ storedTicketId, userData, isExpectedDateSaved = true, onRequ
                                           comment.attachment
                                         )
                                       }
-                                      variant="contained"
+                                      variant="outlined"
                                       size="small"
                                       sx={{
                                         textTransform: "none",
-                                        fontSize: {
-                                          xs: "0.8rem",
-                                          sm: "0.85rem",
-                                        },
-                                        color: "white",
-                                        bgcolor: "#f06292",
-                                        px: { xs: 3, sm: 4 },
+                                        fontSize: "0.78rem",
+                                        fontWeight: 600,
+                                        color: "#64748b",
+                                        borderColor: "#cbd5e1",
+                                        borderRadius: "6px",
+                                        px: 2,
+                                        py: 0.4,
                                         "&:hover": {
-                                          bgcolor: "red",
-                                          color: "white",
+                                          bgcolor: "#f1f5f9",
+                                          borderColor: "#94a3b8",
                                         },
                                       }}
                                     >
@@ -864,18 +914,20 @@ const Comments = ({ storedTicketId, userData, isExpectedDateSaved = true, onRequ
                                     </Button>
                                     <Button
                                       size="small"
+                                      variant="contained"
                                       sx={{
                                         textTransform: "none",
-                                        fontSize: {
-                                          xs: "0.8rem",
-                                          sm: "0.85rem",
-                                        },
-                                        color: "white",
-                                        bgcolor: "#f06292",
-                                        px: { xs: 3, sm: 4 },
+                                        fontSize: "0.78rem",
+                                        fontWeight: 600,
+                                        bgcolor: "#ef4444",
+                                        color: "#ffffff",
+                                        boxShadow: "none",
+                                        borderRadius: "6px",
+                                        px: 2,
+                                        py: 0.4,
                                         "&:hover": {
-                                          bgcolor: "red",
-                                          color: "white",
+                                          bgcolor: "#dc2626",
+                                          boxShadow: "none",
                                         },
                                       }}
                                       onClick={() =>
@@ -892,32 +944,29 @@ const Comments = ({ storedTicketId, userData, isExpectedDateSaved = true, onRequ
                       </Box>
                       <Box
                         sx={{
-                          mt: { xs: 1, sm: 1.5, md: 2 },
+                          mt: 1,
                           display: "flex",
                           alignItems: "center",
-                          gap: { xs: 1, sm: 1.5, md: 2 },
-                          flexDirection: { xs: "row", sm: "row" },
-                          justifyContent: { xs: "stretch", sm: "flex-start" },
+                          gap: 1,
+                          justifyContent: "flex-start",
                         }}
                       >
                         <Button
                           size="small"
                           sx={{
                             textTransform: "none",
-                            fontSize: {
-                              xs: "0.6rem",
-                              sm: "0.6rem",
-                              md: "0.85rem",
-                              lg: "0.7rem",
-                            },
-                            bgcolor: "#155fcc",
-                            color: "white",
-                            px: { xs: 2, sm: 3 },
-                            py: { xs: 0.5, sm: 1 },
-                            minWidth: { xs: "70px", sm: "auto" },
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
+                            bgcolor: "rgba(57, 73, 171, 0.08)",
+                            color: "#3949ab",
+                            border: "1px solid rgba(57, 73, 171, 0.2)",
+                            px: 1.5,
+                            py: 0.35,
+                            borderRadius: "6px",
+                            minWidth: "auto",
                             "&:hover": {
-                              bgcolor: "#9D50BB",
-                              color: "white",
+                              bgcolor: "rgba(57, 73, 171, 0.16)",
+                              borderColor: "#3949ab",
                             },
                           }}
                           onClick={() =>
@@ -930,20 +979,18 @@ const Comments = ({ storedTicketId, userData, isExpectedDateSaved = true, onRequ
                           size="small"
                           sx={{
                             textTransform: "none",
-                            fontSize: {
-                              xs: "0.6rem",
-                              sm: "0.6rem",
-                              md: "0.85rem",
-                              lg: "0.7rem",
-                            },
-                            color: "white",
-                            bgcolor: "#f06292",
-                            px: { xs: 2, sm: 3 },
-                            py: { xs: 0.5, sm: 1 },
-                            minWidth: { xs: "70px", sm: "auto" },
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
+                            bgcolor: "rgba(239, 68, 68, 0.08)",
+                            color: "#ef4444",
+                            border: "1px solid rgba(239, 68, 68, 0.2)",
+                            px: 1.5,
+                            py: 0.35,
+                            borderRadius: "6px",
+                            minWidth: "auto",
                             "&:hover": {
-                              bgcolor: "red",
-                              color: "white",
+                              bgcolor: "rgba(239, 68, 68, 0.16)",
+                              borderColor: "#ef4444",
                             },
                           }}
                           onClick={() => setDeleteCommentId(comment.id)}
@@ -998,8 +1045,22 @@ const Comments = ({ storedTicketId, userData, isExpectedDateSaved = true, onRequ
           <Button
             onClick={() => setDeleteCommentId(null)}
             variant="outlined"
+            size="small"
             disabled={isDeleting}
-            sx={{ textTransform: "none", borderRadius: "8px" }}
+            sx={{
+              textTransform: "none",
+              borderRadius: "8px",
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              color: "#64748b",
+              borderColor: "#cbd5e1",
+              px: 2,
+              py: 0.5,
+              "&:hover": {
+                bgcolor: "#f1f5f9",
+                borderColor: "#94a3b8",
+              },
+            }}
           >
             Cancel
           </Button>
@@ -1016,11 +1077,29 @@ const Comments = ({ storedTicketId, userData, isExpectedDateSaved = true, onRequ
               }
             }}
             variant="contained"
-            color="error"
+            size="small"
             disabled={isDeleting}
-            sx={{ textTransform: "none", borderRadius: "8px" }}
+            sx={{
+              textTransform: "none",
+              borderRadius: "8px",
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              bgcolor: "#ef4444",
+              color: "#ffffff",
+              boxShadow: "none",
+              px: 2.2,
+              py: 0.5,
+              "&:hover": {
+                bgcolor: "#dc2626",
+                boxShadow: "0 2px 4px rgba(239, 68, 68, 0.25)",
+              },
+              "&:disabled": {
+                bgcolor: "#cbd5e1",
+                color: "#94a3b8",
+              },
+            }}
           >
-            {isDeleting ? "Deleting..." : "OK"}
+            {isDeleting ? "Deleting..." : "Delete"}
           </Button>
         </DialogActions>
       </Dialog>

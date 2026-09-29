@@ -9,16 +9,9 @@ import {
   IconButton,
   Card,
   CardContent,
-  Divider,
-  Chip,
   Avatar,
   Button,
   LinearProgress,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  Badge,
   Tooltip,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -324,31 +317,43 @@ const TicketVoiceNotes = ({ isMobile, isTab, isIpad, ticketDetailData, onRequire
         <Box
           sx={{
             mb: 3,
-            bgcolor: "rgba(12, 102, 228, 0.04)",
-            border: "1px dashed rgba(12, 102, 228, 0.3)",
-            borderRadius: "12px",
+            bgcolor: "#f8fafc",
+            border: "1px dashed #cbd5e1",
+            borderRadius: "10px",
             flexShrink: 0,
-            p: 2.5,
+            p: 2,
           }}
         >
-          <Box sx={{ p: 1 }}>
+          <Box>
             <Typography
               variant="subtitle1"
-              sx={{ mb: 1.5, fontWeight: 600, color: "#172B4D", fontSize: "0.95rem" }}
+              sx={{ mb: 1, fontWeight: 700, color: "#1e293b", fontSize: "0.88rem" }}
             >
               Upload Voice Notes
             </Typography>
 
             {/* File Selection */}
-            <Box sx={{ mb: 2, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
+            <Box sx={{ mb: 1.5, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5 }}>
               <Tooltip title="Select multiple audio files (Max 20MB each)">
                 <Button
                   variant="contained"
-                  color="primary"
-                  startIcon={<AttachFile />}
+                  size="small"
+                  startIcon={<AttachFile sx={{ fontSize: "17px !important" }} />}
                   onClick={handleSelectAudioClick}
                   sx={{
-                    px: 3,
+                    bgcolor: "#3949ab",
+                    color: "#ffffff",
+                    textTransform: "none",
+                    fontWeight: 600,
+                    fontSize: "0.8rem",
+                    borderRadius: "6px",
+                    px: 1.8,
+                    py: 0.45,
+                    boxShadow: "none",
+                    "&:hover": {
+                      bgcolor: "#303f9f",
+                      boxShadow: "none",
+                    },
                   }}
                 >
                   Select Audio Files
@@ -365,25 +370,25 @@ const TicketVoiceNotes = ({ isMobile, isTab, isIpad, ticketDetailData, onRequire
               </Tooltip>
               <Typography
                 variant="caption"
-                sx={{ opacity: 0.8, color: "#5E6C84" }}
+                sx={{ color: "#64748b", fontSize: "0.75rem" }}
               >
-                Select multiple audio files (Max 20MB each)
+                Max 20MB per file
               </Typography>
             </Box>
 
             {/* Selected Files List */}
             {selectedAudioFiles.length > 0 && (
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              <Box sx={{ mb: 1.5 }}>
+                <Typography variant="subtitle2" sx={{ mb: 0.8, fontWeight: 600, fontSize: "0.78rem", color: "#475569" }}>
                   Selected Files ({selectedAudioFiles.length})
                 </Typography>
                 <Box
                   sx={{
-                    maxHeight: "150px",
-                    overflow: "auto",
-                    bgcolor: "rgba(255,255,255,0.1)",
-                    borderRadius: "4px",
-                    p: 1,
+                    maxHeight: "160px",
+                    overflowY: "auto",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 1,
                   }}
                 >
                   {selectedAudioFiles.map((file, index) => (
@@ -393,25 +398,28 @@ const TicketVoiceNotes = ({ isMobile, isTab, isIpad, ticketDetailData, onRequire
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
-                        p: 1,
-                        mb: 1,
-                        bgcolor: "rgba(255,255,255,0.1)",
-                        borderRadius: "4px",
+                        p: 1.2,
+                        bgcolor: "#ffffff",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "6px",
+                        boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
                       }}
                     >
-                      <Box sx={{ flex: 1, minWidth: 0, mr: 1 }}>
+                      <Box sx={{ flex: 1, minWidth: 0, mr: 1.5 }}>
                         <Typography
                           variant="body2"
                           sx={{
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
-                            fontSize: isIpad ? "1.2rem" : "1rem"
+                            fontSize: "0.8rem",
+                            fontWeight: 600,
+                            color: "#0f172a",
                           }}
                         >
                           {file.name}
                         </Typography>
-                        <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                        <Typography variant="caption" sx={{ color: "#64748b", fontSize: "0.72rem" }}>
                           {formatFileSize(file.size)}
                         </Typography>
                         {uploadProgress[file.name] && (
@@ -420,8 +428,10 @@ const TicketVoiceNotes = ({ isMobile, isTab, isIpad, ticketDetailData, onRequire
                             value={uploadProgress[file.name]}
                             sx={{
                               mt: 0.5,
+                              borderRadius: 1,
+                              height: 4,
                               "& .MuiLinearProgress-bar": {
-                                bgcolor: "white",
+                                bgcolor: "#3949ab",
                               },
                             }}
                           />
@@ -429,11 +439,19 @@ const TicketVoiceNotes = ({ isMobile, isTab, isIpad, ticketDetailData, onRequire
                       </Box>
                       <Tooltip title="Remove file">
                         <IconButton
-                          size="medium"
+                          size="small"
                           onClick={() => removeSelectedFile(index)}
-                          sx={{ color: "white" }}
+                          sx={{
+                            color: "#ef4444",
+                            p: 0.5,
+                            borderRadius: "6px",
+                            "&:hover": {
+                              bgcolor: "rgba(239, 68, 68, 0.08)",
+                              color: "#dc2626",
+                            },
+                          }}
                         >
-                          <DeleteIcon />
+                          <DeleteIcon sx={{ fontSize: "18px" }} />
                         </IconButton>
                       </Tooltip>
                     </Box>
@@ -444,17 +462,33 @@ const TicketVoiceNotes = ({ isMobile, isTab, isIpad, ticketDetailData, onRequire
 
             {/* Upload Button */}
             {selectedAudioFiles.length > 0 && (
-              <Box sx={{ mt: 2 }}>
+              <Box sx={{ mt: 1.5 }}>
                 <Tooltip title="Start uploading selected voice notes">
                   <span>
                     <Button
                       onClick={handleVoiceNotesUpload}
                       disabled={loading || createLoading}
-                      variant="outlined"
-                      color="primary"
-                      startIcon={<CloudUpload />}
+                      variant="contained"
+                      size="small"
+                      startIcon={<CloudUpload sx={{ fontSize: "17px !important" }} />}
                       sx={{
-                        px: 3,
+                        bgcolor: "#3949ab",
+                        color: "#ffffff",
+                        textTransform: "none",
+                        fontWeight: 600,
+                        fontSize: "0.8rem",
+                        borderRadius: "6px",
+                        px: 1.8,
+                        py: 0.45,
+                        boxShadow: "none",
+                        "&:hover": {
+                          bgcolor: "#303f9f",
+                          boxShadow: "none",
+                        },
+                        "&:disabled": {
+                          bgcolor: "#cbd5e1",
+                          color: "#94a3b8",
+                        },
                       }}
                     >
                       Upload {selectedAudioFiles.length} File{selectedAudioFiles.length > 1 ? "s" : ""}

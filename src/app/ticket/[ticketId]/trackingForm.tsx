@@ -11,6 +11,7 @@ import {
   useMediaQuery,
   LinearProgress,
   Tooltip,
+  CircularProgress,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import InfoIcon from "@mui/icons-material/Info";
@@ -396,9 +397,24 @@ const TrackingForm: React.FC<FormComponentProps> = ( {
                 p="20px"
               >
                 <Button
-                  color="inherit"
+                  size="small"
                   variant="outlined"
-                  sx={{ mr: 2, px: 4 }}
+                  sx={{
+                    mr: 2,
+                    px: 2,
+                    py: 0.4,
+                    fontSize: "0.8rem",
+                    fontWeight: 600,
+                    textTransform: "none",
+                    color: "#64748b",
+                    borderColor: "#cbd5e1",
+                    borderRadius: "6px",
+                    "&:hover": {
+                      bgcolor: "#f1f5f9",
+                      borderColor: "#94a3b8",
+                      color: "#0f172a",
+                    },
+                  }}
                   onClick={() => {
                     resetForm();
                     handleDialogClose();
@@ -407,13 +423,26 @@ const TrackingForm: React.FC<FormComponentProps> = ( {
                   Cancel
                 </Button>
                 <Button
+                  size="small"
                   type="submit"
-                  color="primary"
                   variant="contained"
-                  sx={{ px: 4 }}
+                  startIcon={isSubmitting ? <CircularProgress size={14} color="inherit" /> : null}
+                  sx={{
+                    px: 2,
+                    py: 0.4,
+                    fontSize: "0.8rem",
+                    fontWeight: 600,
+                    textTransform: "none",
+                    bgcolor: "#3949ab",
+                    color: "#ffffff",
+                    borderRadius: "6px",
+                    boxShadow: "none",
+                    "&:hover": { bgcolor: "#303f9f", boxShadow: "none" },
+                    "&:disabled": { bgcolor: "#cbd5e1", color: "#94a3b8" },
+                  }}
                   disabled={!dirty || isSubmitting}
                 >
-                  Save
+                  {isSubmitting ? "Saving..." : "Save"}
                 </Button>
                 <Toast
                   alerting={toastInfo.toastAlert}

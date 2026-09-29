@@ -1,4 +1,5 @@
 import React, { useState, memo, useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import {
   Box,
   Grid,
@@ -7,11 +8,16 @@ import {
   Button,
   CircularProgress,
   Tooltip,
+  IconButton,
 } from "@mui/material";
 import PdfViewer from "@/app/components/common/PdfViewer";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
+import DeleteIcon from "@mui/icons-material/Delete";
+import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
 import { axiosInstance } from "@/apis/config/axiosConfig";
 import { Utility } from "@/utils";
+import type { AppDispatch, RootState } from "@/redux/store";
+import Toast from "../../components/common/Toast";
 
 const TicketDocuments = ({
   isMobile,
@@ -27,9 +33,13 @@ const TicketDocuments = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [showAttachment, setShowAttachment] = useState({});
   const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFilePreview, setSelectedFilePreview] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const itemsPerPage = 3;
-  const { capitalizeFirstLetter, decodedToken } = Utility();
+
+  const dispatch: AppDispatch = useDispatch();
+  const { toast } = useSelector((state: RootState) => state.toast);
+  const { capitalizeFirstLetter, decodedToken, toastAndNavigate } = Utility();
 
   const toggleAttachment = (id) => {
     setShowAttachment((prev) => ({
@@ -46,34 +56,62 @@ const TicketDocuments = ({
     startIndex + itemsPerPage
   );
 
-  const handleFileChange = async (event) => {
+  const formatFileSize = (bytes) => {
+    if (!bytes || bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
+  const handleFileChange = (event) => {
     if (event.target.files && event.target.files[0]) {
       const file = event.target.files[0];
 
       // Check if the user is online
       if (!navigator.onLine) {
+        toastAndNavigate(dispatch, true, "error", "You are offline. Please check your internet connection.");
         return;
       }
 
       // Check file size limit (10MB = 10,485,760 bytes)
       if (file.size > 10485760) {
-        handleToast(`${file.name} exceeds the 10MB limit`, "error");
+        toastAndNavigate(dispatch, true, "error", `${file.name} exceeds the 10MB limit`);
         return;
       }
 
       setSelectedFile(file);
-      await uploadDocument(file);
+
+      // Create preview if it is an image
+      if (file.type && file.type.startsWith("image/")) {
+        const previewUrl = URL.createObjectURL(file);
+        setSelectedFilePreview(previewUrl);
+      } else {
+        setSelectedFilePreview("");
+      }
     }
   };
 
-  // Upload document function (similar to Step3Form logic)
-  const uploadDocument = async (file) => {
+  const handleCancelSelectedFile = () => {
+    setSelectedFile(null);
+    setSelectedFilePreview("");
+    const fileInput = document.getElementById("add-document-input");
+    if (fileInput) {
+      fileInput.value = "";
+    }
+  };
+
+  // Upload document function (explicitly triggered by user)
+  const handleUploadSelectedFile = async () => {
+    if (!selectedFile) return;
+    if (onRequireExpectedDate && !onRequireExpectedDate()) return;
+
     let attachmentUrl = null;
     setIsUploading(true);
 
     const formData = new FormData();
-    formData.append("document", file);
-    formData.append("folder", `document/${file.name}`);
+    formData.append("document", selectedFile);
+    formData.append("folder", `document/${selectedFile.name}`);
 
     try {
       // First upload to S3
@@ -101,38 +139,40 @@ const TicketDocuments = ({
           try {
             await onCreateHistory({
               ticket_id: ticketId,
-              action: `${decodedToken()?.username} uploaded a document - ${file.name}`,
+              action: `${decodedToken()?.username} uploaded a document - ${selectedFile.name}`,
             });
           } catch (histErr) {
             console.error("Error creating ticket history for document upload:", histErr);
           }
         }
 
+        toastAndNavigate(dispatch, true, "info", "Document uploaded successfully");
+
         // Call callback to refresh documents list if provided
         if (onDocumentUploaded) {
           onDocumentUploaded();
         }
+
+        handleCancelSelectedFile();
       }
     } catch (err) {
       console.error("Error uploading document:", err);
+      toastAndNavigate(dispatch, true, "error", "Error uploading document");
     } finally {
       setIsUploading(false);
-      setSelectedFile(null);
-      // Reset file input
-      const fileInput = document.getElementById("add-document-input");
-      if (fileInput) {
-        fileInput.value = "";
-      }
     }
   };
 
   // Handler for button click to trigger file input
   const handleAddDocumentClick = () => {
     if (onRequireExpectedDate && !onRequireExpectedDate()) return;
-    document.getElementById("add-document-input").click();
+    const fileInput = document.getElementById("add-document-input");
+    if (fileInput) {
+      fileInput.click();
+    }
   };
 
-  const isPDF = (url) => url.toLowerCase().endsWith(".pdf");
+  const isPDF = (url) => url && url.toLowerCase().endsWith(".pdf");
 
   return (
     <Box sx={{ height: "100%", width: "100%" }}>
@@ -161,34 +201,38 @@ const TicketDocuments = ({
           <Typography
             variant="h6"
             sx={{
-              color: "#172B4D",
+              color: "#1e293b",
               fontWeight: 700,
-              fontSize: { xs: "1.1rem", sm: "1.2rem", md: "1.3rem" },
+              fontSize: { xs: "1.1rem", sm: "1.2rem", md: "1.25rem" },
             }}
           >
             Documents
           </Typography>
 
-          <Tooltip title="Upload a new document">
+          <Tooltip title="Select a new document to upload">
             <span>
               <Button
                 variant="contained"
-                color="primary"
-                startIcon={
-                  isUploading ? (
-                    <CircularProgress size={16} color="inherit" />
-                  ) : (
-                    <CloudUploadIcon />
-                  )
-                }
+                size="small"
+                startIcon={<CloudUploadIcon sx={{ fontSize: "16px !important" }} />}
                 onClick={handleAddDocumentClick}
                 disabled={isUploading}
                 sx={{
-                  px: { xs: 2, sm: 3 },
-                  minWidth: 'fit-content',
+                  bgcolor: "#3949ab",
+                  color: "#ffffff",
+                  textTransform: "none",
+                  fontWeight: 600,
+                  fontSize: "0.8rem",
+                  borderRadius: "6px",
+                  px: 1.8,
+                  py: 0.45,
+                  boxShadow: "none",
+                  minWidth: "fit-content",
+                  "&:hover": { bgcolor: "#303f9f", boxShadow: "none" },
+                  "&:disabled": { bgcolor: "#cbd5e1", color: "#94a3b8" },
                 }}
               >
-                {isUploading ? "Uploading..." : "Add Document"}
+                Add Document
               </Button>
             </span>
           </Tooltip>
@@ -200,6 +244,136 @@ const TicketDocuments = ({
             onChange={handleFileChange}
           />
         </Box>
+
+        {/* Selected Document Pending Upload Section */}
+        {selectedFile && (
+          <Box
+            sx={{
+              mb: 2,
+              p: 1.5,
+              bgcolor: "#f8fafc",
+              border: "1px dashed #cbd5e1",
+              borderRadius: "8px",
+            }}
+          >
+            <Typography
+              variant="caption"
+              sx={{
+                fontWeight: 700,
+                color: "#475569",
+                textTransform: "uppercase",
+                fontSize: "0.7rem",
+                mb: 0.8,
+                display: "block",
+                letterSpacing: "0.02em",
+              }}
+            >
+              Selected Document
+            </Typography>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                p: 1.2,
+                bgcolor: "#ffffff",
+                border: "1px solid #e2e8f0",
+                borderRadius: "6px",
+                boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                gap: 1.5,
+              }}
+            >
+              {selectedFilePreview ? (
+                <Box
+                  component="img"
+                  src={selectedFilePreview}
+                  alt="Preview"
+                  sx={{
+                    width: 38,
+                    height: 38,
+                    objectFit: "cover",
+                    borderRadius: "4px",
+                    border: "1px solid #e2e8f0",
+                    flexShrink: 0,
+                  }}
+                />
+              ) : (
+                <InsertDriveFileIcon sx={{ color: "#3949ab", fontSize: 28, flexShrink: 0 }} />
+              )}
+
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    fontSize: "0.8rem",
+                    fontWeight: 600,
+                    color: "#0f172a",
+                  }}
+                >
+                  {selectedFile.name}
+                </Typography>
+                <Typography variant="caption" sx={{ color: "#64748b", fontSize: "0.72rem" }}>
+                  {formatFileSize(selectedFile.size)}
+                </Typography>
+              </Box>
+
+              {/* Action Buttons: Delete/Remove & Upload */}
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
+                <Tooltip title="Remove selected file">
+                  <IconButton
+                    size="small"
+                    onClick={handleCancelSelectedFile}
+                    disabled={isUploading}
+                    sx={{
+                      color: "#ef4444",
+                      p: 0.5,
+                      borderRadius: "6px",
+                      "&:hover": {
+                        bgcolor: "rgba(239, 68, 68, 0.08)",
+                        color: "#dc2626",
+                      },
+                    }}
+                  >
+                    <DeleteIcon sx={{ fontSize: "18px" }} />
+                  </IconButton>
+                </Tooltip>
+
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={handleUploadSelectedFile}
+                  disabled={isUploading}
+                  startIcon={
+                    isUploading ? (
+                      <CircularProgress size={14} color="inherit" />
+                    ) : (
+                      <CloudUploadIcon sx={{ fontSize: "16px !important" }} />
+                    )
+                  }
+                  sx={{
+                    bgcolor: "#3949ab",
+                    color: "#ffffff",
+                    fontSize: "0.78rem",
+                    fontWeight: 600,
+                    textTransform: "none",
+                    borderRadius: "6px",
+                    px: 1.8,
+                    py: 0.45,
+                    boxShadow: "none",
+                    "&:hover": { bgcolor: "#303f9f", boxShadow: "none" },
+                    "&:disabled": { bgcolor: "#cbd5e1", color: "#94a3b8" },
+                  }}
+                >
+                  {isUploading ? "Uploading..." : "Upload"}
+                </Button>
+              </Box>
+            </Box>
+          </Box>
+        )}
+
         {documents.length > 0 ? (
           <Box
             sx={{
@@ -216,7 +390,7 @@ const TicketDocuments = ({
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    padding: "1rem",
+                    padding: "0.9rem 1rem",
                     background: "var(--mui-palette-neutral-100)",
                     border: "1px solid var(--mui-palette-neutral-200)",
                     borderRadius: "8px",
@@ -224,14 +398,14 @@ const TicketDocuments = ({
                     transition: "all 0.2s ease",
                     "&:hover": {
                       background: "#fff",
-                      borderColor: "primary.main",
+                      borderColor: "#3949ab",
                       boxShadow: "0px 2px 8px rgba(0,0,0,0.05)",
                     },
                   }}
                 >
                   <Typography
                     variant="body1"
-                    sx={{ color: "#172B4D", fontWeight: 500, flexGrow: 1, fontSize: "0.95rem" }}
+                    sx={{ color: "#172B4D", fontWeight: 500, flexGrow: 1, fontSize: "0.9rem" }}
                   >
                     {capitalizeFirstLetter(doc.type) || "Unknown Document"}
                   </Typography>
@@ -246,12 +420,17 @@ const TicketDocuments = ({
                         variant="outlined"
                         size="small"
                         sx={{
-                          color: "primary.main",
-                          borderColor: "primary.main",
-                          px: 2,
+                          color: "#3949ab",
+                          borderColor: "#cbd5e1",
+                          fontSize: "0.78rem",
+                          fontWeight: 600,
+                          textTransform: "none",
+                          borderRadius: "6px",
+                          px: 1.5,
+                          py: 0.3,
                           "&:hover": {
-                            bgcolor: "primary.main",
-                            color: "white",
+                            bgcolor: "rgba(57, 73, 171, 0.08)",
+                            borderColor: "#3949ab",
                           },
                         }}
                       >
@@ -283,50 +462,50 @@ const TicketDocuments = ({
                       zIndex: 1000,
                       backgroundColor: "white",
                       borderRadius: "8px",
-                      boxShadow: "0px 4px 6px rgba(0, 0, 0, 0.1)",
+                      boxShadow: "0px 4px 12px rgba(0, 0, 0, 0.15)",
                       padding: 2,
                       textAlign: "center",
-                      height: isMobile ? "40vh" : isTab ? "40vh" : "100%",
-                      width: isMobile ? "80vw" : isTab ? "60vw" : "100%",
+                      maxHeight: "85vh",
+                      maxWidth: "90vw",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
                     }}
                   >
-                    <Box>
+                    <Box sx={{ mb: 2, overflow: "auto", maxHeight: "70vh" }}>
                       <img
                         src={doc.document_url}
                         alt={`Attachment for ${doc.type}`}
                         style={{
-                          height: isMobile ? "33vh" : isTab ? "35vh" : "90vh",
-                          borderRadius: "8px",
-                          marginLeft: "15vw",
+                          maxHeight: "65vh",
+                          maxWidth: "80vw",
+                          objectFit: "contain",
+                          borderRadius: "6px",
                         }}
                       />
                     </Box>
-                    <Box
+                    <Button
+                      onClick={() => toggleAttachment(index)}
+                      variant="outlined"
+                      size="small"
                       sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
+                        textTransform: "none",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#64748b",
+                        borderColor: "#cbd5e1",
+                        borderRadius: "6px",
+                        px: 2,
+                        py: 0.4,
+                        "&:hover": {
+                          bgcolor: "#f1f5f9",
+                          borderColor: "#94a3b8",
+                          color: "#0f172a",
+                        },
                       }}
                     >
-                      <Button
-                        onClick={() => toggleAttachment(index)}
-                        variant="contained"
-                        size="small"
-                        sx={{
-                          textTransform: "none",
-                          fontSize: "0.85rem",
-                          color: "white",
-                          bgcolor: "red",
-                          marginLeft: "10vw",
-                          "&:hover": {
-                            bgcolor: "darkgray",
-                            color: "black",
-                          },
-                        }}
-                      >
-                        Close
-                      </Button>
-                    </Box>
+                      Close
+                    </Button>
                   </Box>
                 )}
               </React.Fragment>
@@ -336,7 +515,8 @@ const TicketDocuments = ({
           <Typography
             sx={{
               color: "#5E6C84",
-              fontFamily: "",
+              fontSize: "0.85rem",
+              py: 2,
             }}
           >
             No documents available.
@@ -359,6 +539,22 @@ const TicketDocuments = ({
               size="small"
               disabled={currentPage === 1}
               onClick={() => setCurrentPage((prev) => prev - 1)}
+              sx={{
+                color: "#64748b",
+                borderColor: "#cbd5e1",
+                fontSize: "0.78rem",
+                fontWeight: 600,
+                textTransform: "none",
+                borderRadius: "6px",
+                px: 1.5,
+                py: 0.3,
+                "&:hover": {
+                  bgcolor: "#f1f5f9",
+                  borderColor: "#94a3b8",
+                  color: "#0f172a",
+                },
+                "&:disabled": { borderColor: "#e2e8f0", color: "#94a3b8" },
+              }}
             >
               Previous
             </Button>
@@ -367,6 +563,7 @@ const TicketDocuments = ({
               sx={{
                 color: "text.secondary",
                 fontWeight: 600,
+                fontSize: "0.8rem",
               }}
             >
               Page {currentPage} of {totalPages}
@@ -376,12 +573,33 @@ const TicketDocuments = ({
               size="small"
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage((prev) => prev + 1)}
+              sx={{
+                color: "#64748b",
+                borderColor: "#cbd5e1",
+                fontSize: "0.78rem",
+                fontWeight: 600,
+                textTransform: "none",
+                borderRadius: "6px",
+                px: 1.5,
+                py: 0.3,
+                "&:hover": {
+                  bgcolor: "#f1f5f9",
+                  borderColor: "#94a3b8",
+                  color: "#0f172a",
+                },
+                "&:disabled": { borderColor: "#e2e8f0", color: "#94a3b8" },
+              }}
             >
               Next
             </Button>
           </Box>
         )}
       </Paper>
+      <Toast
+        alerting={toast.toastAlert}
+        severity={toast.toastSeverity}
+        message={toast.toastMessage}
+      />
     </Box>
   );
 };
