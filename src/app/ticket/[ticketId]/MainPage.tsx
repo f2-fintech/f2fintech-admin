@@ -325,11 +325,11 @@ const MainPage = () => {
     const currentMonthIdx = now.getMonth();
     const currentYear = now.getFullYear();
 
-    const upcoming = monthNames.slice(currentMonthIdx + 1).map((m, idx) => ({
+    const upcoming = monthNames.slice(currentMonthIdx).map((m, idx) => ({
       label: m,
       value: m,
       year: currentYear,
-      monthIndex: currentMonthIdx + 1 + idx,
+      monthIndex: currentMonthIdx + idx,
     }));
 
     if (upcoming.length === 0) {
