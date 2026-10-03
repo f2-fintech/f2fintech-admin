@@ -25,6 +25,9 @@ import InputLabel from "@mui/material/InputLabel";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import ListSubheader from "@mui/material/ListSubheader";
+import TextField from "@mui/material/TextField";
+import InputAdornment from "@mui/material/InputAdornment";
+import { MagnifyingGlass as SearchIcon } from "@phosphor-icons/react/dist/ssr/MagnifyingGlass";
 import { SelectChangeEvent } from "@mui/material/Select";
 import SupervisorAccountRounded from "@mui/icons-material/SupervisorAccountRounded";
 import PersonRounded from "@mui/icons-material/PersonRounded";
@@ -65,6 +68,12 @@ export type UnifiedNotification =
 export function AppBarNav(): React.JSX.Element {
   const [openNav, setOpenNav] = React.useState<boolean>(false);
   const [searchQuery, setSearchQuery] = React.useState<string>("");
+  const [companySearchQuery, setCompanySearchQuery] = React.useState<string>("");
+  const [teamSearchQuery, setTeamSearchQuery] = React.useState<string>("");
+  const [companyDropdownOpen, setCompanyDropdownOpen] = React.useState(false);
+  const [teamDropdownOpen, setTeamDropdownOpen] = React.useState(false);
+  const companySearchRef = React.useRef<HTMLInputElement>(null);
+  const teamSearchRef = React.useRef<HTMLInputElement>(null);
   const [companies, setCompanies] = useState<any[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<string>("101");
   const [selectedTeamMember, setSelectedTeamMember] = useState<string>("all");
@@ -77,6 +86,19 @@ export function AppBarNav(): React.JSX.Element {
 
   const userDesignation = userInfo?.designation?.toLowerCase() || '';
   const isL1OrL2 = ["team leader", "tl", "sales manager", "sm", "l1", "l2"].includes(userDesignation);
+
+  // Refocus search inputs after each keystroke (MUI Select steals focus otherwise)
+  React.useEffect(() => {
+    if (companyDropdownOpen && companySearchRef.current) {
+      companySearchRef.current.focus();
+    }
+  }, [companySearchQuery, companyDropdownOpen]);
+
+  React.useEffect(() => {
+    if (teamDropdownOpen && teamSearchRef.current) {
+      teamSearchRef.current.focus();
+    }
+  }, [teamSearchQuery, teamDropdownOpen]);
 
   // Notification state
   const [notifications, setNotifications] = useState<UnifiedNotification[]>([]);
@@ -171,26 +193,11 @@ export function AppBarNav(): React.JSX.Element {
 
   const fetchCompanies = useCallback(async () => {
     try {
-      if (typeof window !== "undefined") {
-        const cached = sessionStorage.getItem("cached_companies");
-        if (cached) {
-          try {
-            const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setCompanies(parsed);
-              return;
-            }
-          } catch {
-            sessionStorage.removeItem("cached_companies");
-          }
-        }
-      }
-      const res = await CompanyAPI.getAll({ page: 1, limit: 100 });
+      const res = await CompanyAPI.getAll({ page: 1, limit: 100, isActive: true });
       const results = res.data.results || [];
-      setCompanies(results);
-      if (typeof window !== "undefined" && results.length > 0) {
-        sessionStorage.setItem("cached_companies", JSON.stringify(results));
-      }
+      // Extra safety: filter only active companies on client side too
+      const activeResults = results.filter((c: any) => c.isActive !== false);
+      setCompanies(activeResults);
     } catch (error) {
       console.error("Failed to load companies", error);
     }
@@ -428,6 +435,8 @@ export function AppBarNav(): React.JSX.Element {
                       displayEmpty
                       notched
                       fullWidth
+                      onOpen={() => setTeamDropdownOpen(true)}
+                      onClose={() => { setTeamSearchQuery(""); setTeamDropdownOpen(false); }}
                       IconComponent={ArrowDropDownRounded}
                       renderValue={(selected: any) => {
                         if (selected === "all" || !selected) {
@@ -485,6 +494,36 @@ export function AppBarNav(): React.JSX.Element {
                         },
                       }}
                     >
+                      {/* Team Member Search Box */}
+                      <ListSubheader
+                        onKeyDown={(e) => e.stopPropagation()}
+                        sx={{ p: 1, bgcolor: 'white', position: 'sticky', top: 0, zIndex: 1 }}
+                      >
+                        <TextField
+                          size="small"
+                          fullWidth
+                          placeholder="Search member..."
+                          value={teamSearchQuery}
+                          inputRef={teamSearchRef}
+                          onChange={(e) => setTeamSearchQuery(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          InputProps={{
+                            startAdornment: (
+                              <InputAdornment position="start">
+                                <SearchIcon size={16} color="#94a3b8" />
+                              </InputAdornment>
+                            ),
+                          }}
+                          sx={{
+                            '& .MuiOutlinedInput-root': {
+                              borderRadius: '8px',
+                              fontSize: '0.85rem',
+                            }
+                          }}
+                        />
+                      </ListSubheader>
+
                       <MenuItem
                         value="all"
                         sx={{
@@ -494,7 +533,8 @@ export function AppBarNav(): React.JSX.Element {
                           borderBottom: selectedTeamMember === "all" ? 'none' : '1px solid #e2e8f0',
                           border: selectedTeamMember === "all" ? '2px solid #3949ab' : 'none',
                           borderRadius: selectedTeamMember === "all" ? '8px' : 0,
-                          margin: selectedTeamMember === "all" ? '4px 8px' : 0
+                          margin: selectedTeamMember === "all" ? '4px 8px' : 0,
+                          display: "all team members".includes(teamSearchQuery.toLowerCase()) ? 'flex' : 'none'
                         }}
                       >
                         All Team Members
@@ -528,12 +568,12 @@ export function AppBarNav(): React.JSX.Element {
                       </MenuItem>
 
                       {/* L1 Team Leaders Group */}
-                      {l1Leaders.length > 0 && (
+                      {l1Leaders.filter((m: any) => !teamSearchQuery || m.username?.toLowerCase().includes(teamSearchQuery.toLowerCase()) || m.designation?.toLowerCase().includes(teamSearchQuery.toLowerCase())).length > 0 && (
                         <ListSubheader sx={{ bgcolor: '#f8fafc', lineHeight: '36px', fontWeight: 700, color: '#475569', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 1, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                           <PersonRounded fontSize="small" /> L1: Team Leader
                         </ListSubheader>
                       )}
-                      {l1Leaders.map((member: any) => {
+                      {l1Leaders.filter((m: any) => !teamSearchQuery || m.username?.toLowerCase().includes(teamSearchQuery.toLowerCase()) || m.designation?.toLowerCase().includes(teamSearchQuery.toLowerCase())).map((member: any) => {
                         const isSelected = selectedTeamMember === member.id.toString();
                         return (
                           <MenuItem
@@ -565,12 +605,12 @@ export function AppBarNav(): React.JSX.Element {
                       })}
 
                       {/* L0 Executives Group */}
-                      {l0Executives.length > 0 && (
+                      {l0Executives.filter((m: any) => !teamSearchQuery || m.username?.toLowerCase().includes(teamSearchQuery.toLowerCase()) || m.designation?.toLowerCase().includes(teamSearchQuery.toLowerCase())).length > 0 && (
                         <ListSubheader sx={{ bgcolor: '#f8fafc', lineHeight: '36px', fontWeight: 700, color: '#475569', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 1, textTransform: 'uppercase', letterSpacing: '0.5px', borderTop: l1Leaders.length > 0 ? '1px solid #e2e8f0' : 'none', mt: l1Leaders.length > 0 ? 1 : 0 }}>
                           <PersonRounded fontSize="small" /> Executives
                         </ListSubheader>
                       )}
-                      {l0Executives.map((member: any) => {
+                      {l0Executives.filter((m: any) => !teamSearchQuery || m.username?.toLowerCase().includes(teamSearchQuery.toLowerCase()) || m.designation?.toLowerCase().includes(teamSearchQuery.toLowerCase())).map((member: any) => {
                         const isSelected = selectedTeamMember === member.id.toString();
                         return (
                           <MenuItem
@@ -633,6 +673,8 @@ export function AppBarNav(): React.JSX.Element {
                     displayEmpty
                     notched
                     fullWidth
+                    onOpen={() => setCompanyDropdownOpen(true)}
+                    onClose={() => { setCompanySearchQuery(""); setCompanyDropdownOpen(false); }}
                     IconComponent={ArrowDropDownRounded}
                     renderValue={(selected: any) => {
                       if (!selected) {
@@ -681,6 +723,36 @@ export function AppBarNav(): React.JSX.Element {
                       },
                     }}
                   >
+                    {/* Company Search Box */}
+                    <ListSubheader
+                      onKeyDown={(e) => e.stopPropagation()}
+                      sx={{ p: 1, bgcolor: 'white', position: 'sticky', top: 0, zIndex: 1 }}
+                    >
+                      <TextField
+                        size="small"
+                        fullWidth
+                        placeholder="Search aggregator..."
+                        value={companySearchQuery}
+                        inputRef={companySearchRef}
+                        onChange={(e) => setCompanySearchQuery(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <SearchIcon size={16} color="#94a3b8" />
+                            </InputAdornment>
+                          ),
+                        }}
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: '8px',
+                            fontSize: '0.85rem',
+                          }
+                        }}
+                      />
+                    </ListSubheader>
+
                     <MenuItem
                       value=""
                       sx={{
@@ -690,12 +762,13 @@ export function AppBarNav(): React.JSX.Element {
                         borderBottom: !selectedCompany ? 'none' : '1px solid #e2e8f0',
                         border: !selectedCompany ? '2px solid #3949ab' : 'none',
                         borderRadius: !selectedCompany ? '8px' : 0,
-                        margin: !selectedCompany ? '4px 8px' : 0
+                        margin: !selectedCompany ? '4px 8px' : 0,
+                        display: "all aggregators".includes(companySearchQuery.toLowerCase()) ? 'flex' : 'none'
                       }}
                     >
                       All Aggregators
                     </MenuItem>
-                    {companies?.map((company: any, index: number) => {
+                    {companies?.filter((company: any) => !companySearchQuery || company.name?.toLowerCase().includes(companySearchQuery.toLowerCase())).map((company: any, index: number) => {
                       const isSelected = selectedCompany === company.companyId?.toString();
                       return (
                         <MenuItem
