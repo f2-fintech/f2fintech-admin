@@ -356,16 +356,19 @@ const HomeContent: React.FC = () => {
   const filteredCustomers = useMemo(() => {
     let applications = customerApplication?.results || [];
 
-    // Filter by company for non-admins
+    // Filter by company for non-admins (company 101 sees all companies' applications)
     if (userRole !== "admin" && userRole !== "super admin") {
-      applications = applications.filter(application =>
-        ((application as any).company_id === userCompanyId) ||
-        (application.companyId === userCompanyId)
-      );
+      const is101Company = Number(userCompanyId) === 101 || Number(selectedCompany) === 101;
+      if (!is101Company) {
+        applications = applications.filter(application =>
+          ((application as any).company_id === userCompanyId) ||
+          (application.companyId === userCompanyId)
+        );
+      }
     }
 
     return applications;
-  }, [customerApplication, userRole, userCompanyId]);
+  }, [customerApplication, userRole, userCompanyId, selectedCompany]);
 
   // Update the count display to show total count from backend
   const displayCount = useMemo(() => {
@@ -380,6 +383,12 @@ const HomeContent: React.FC = () => {
   const validateCompanyForCheckbox = (): boolean => {
     if (typeof window === "undefined") return false;
     const selectedCompanyId = localStorage.getItem("selectedCompanyId");
+
+    // Company 101 or admin/super admin users are permitted to process applications across all companies
+    const is101 = Number(userCompanyId) === 101 || Number(selectedCompany) === 101 || Number(selectedCompanyId) === 101;
+    if (is101 || userRole === "admin" || userRole === "super admin") {
+      return true;
+    }
 
     if (!selectedCompanyId || selectedCompanyId === "") {
       toastAndNavigate(
@@ -402,6 +411,12 @@ const HomeContent: React.FC = () => {
     // Check if we're in browser environment
     if (typeof window === "undefined") return false;
     let selectedCompanyId = localStorage.getItem("selectedCompanyId");
+
+    // Company 101 or admin/super admin users are permitted to process applications across all companies
+    const is101 = Number(userCompanyId) === 101 || Number(selectedCompany) === 101 || Number(selectedCompanyId) === 101;
+    if (is101 || userRole === "admin" || userRole === "super admin") {
+      return true;
+    }
 
     // If no company is selected in local storage but they haven't explicitly set "All Aggregators" ("")
     // then we default to 101 (Financial Freedom).
@@ -1022,6 +1037,21 @@ const HomeContent: React.FC = () => {
                           }}
                         >
                           S.no
+                        </TableCell>
+
+                        {/* Channel */}
+                        <TableCell
+                          align="center"
+                          sx={{
+                            fontWeight: 600,
+                            color: "white",
+                            fontSize: { xs: "0.75rem", sm: "0.875rem", md: "0.95rem" },
+                            whiteSpace: "nowrap",
+                            minWidth: "110px",
+                            px: 1,
+                          }}
+                        >
+                          Channel
                         </TableCell>
 
                         {/* Source */}

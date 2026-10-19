@@ -90,6 +90,8 @@ interface ApplicationCardProps {
     due_date?: string;
     source?: string;
     applicationSource?: string;
+    companyId?: number;
+    companyName?: string;
     existing_loans?: string;
     existingLoans?: string;
     is_picked?: number;
@@ -814,6 +816,34 @@ const ApplicationCard: React.FC<ApplicationCardProps> = ({
                 <Typography sx={{ fontSize: "0.8rem", color: "#1a2340", lineHeight: 1 }}>
                   {capitalizeEachWord(customerApplication.leadType || "N/A")}
                 </Typography>
+              </Box>
+
+              {/* Channel */}
+              <Box sx={{ width: "1px", height: "28px", bgcolor: "#e8edf5", flexShrink: 0 }} />
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 0.4 }}>
+                <Typography sx={{ fontSize: "0.68rem", color: "#8892a4", fontWeight: 600, lineHeight: 1 }}>Channel</Typography>
+                <Tooltip title={customerApplication.companyName || "Financial Freedom"}>
+                  <Chip
+                    label={capitalizeEachWord(customerApplication.companyName || (customerApplication.companyId ? `Company ${customerApplication.companyId}` : "Financial Freedom"))}
+                    size="small"
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: "0.7rem",
+                      bgcolor: "#eef2ff",
+                      color: "#3730a3",
+                      border: "1px solid #c7d2fe",
+                      borderRadius: "6px",
+                      height: "22px",
+                      maxWidth: "130px",
+                      "& .MuiChip-label": {
+                        px: 0.8,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }
+                    }}
+                  />
+                </Tooltip>
               </Box>
 
               {/* Source */}
@@ -1668,6 +1698,33 @@ const ApplicationCard: React.FC<ApplicationCardProps> = ({
                       </Grid>
                     )}
 
+                    {/* Channel */}
+                    <Grid item xs={6}>
+                      <Typography sx={{ fontSize: "0.68rem", color: "#8892a4", fontWeight: 700, mb: 0.5, letterSpacing: "0.03em", mt: 1 }}>CHANNEL</Typography>
+                      <Tooltip title={customerApplication.companyName || "Financial Freedom"}>
+                        <Chip
+                          label={capitalizeEachWord(customerApplication.companyName || (customerApplication.companyId ? `Company ${customerApplication.companyId}` : "Financial Freedom"))}
+                          size="small"
+                          sx={{
+                            fontWeight: 600,
+                            fontSize: "0.7rem",
+                            bgcolor: "#eef2ff",
+                            color: "#3730a3",
+                            border: "1px solid #c7d2fe",
+                            borderRadius: "6px",
+                            height: "22px",
+                            maxWidth: "130px",
+                            "& .MuiChip-label": {
+                              px: 0.8,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }
+                          }}
+                        />
+                      </Tooltip>
+                    </Grid>
+
                     {/* Location Row */}
                     <Grid item xs={6}>
                       <Typography sx={{ fontSize: "0.68rem", color: "#8892a4", fontWeight: 700, mb: 0.3, letterSpacing: "0.03em", mt: 1 }}>TENURE</Typography>
@@ -2024,6 +2081,33 @@ const ApplicationCard: React.FC<ApplicationCardProps> = ({
             <Typography variant="body2" sx={{ fontWeight: "bold", whiteSpace: isTab ? "normal" : "", }}>
               {customerApplication.ticketId || index}
             </Typography>
+          </TableCell>
+
+          {/* Channel */}
+          <TableCell align="center" sx={{ minWidth: "110px", px: 1 }}>
+            <Tooltip title={customerApplication.companyName || "Financial Freedom"}>
+              <Chip
+                label={capitalizeEachWord(customerApplication.companyName || (customerApplication.companyId ? `Company ${customerApplication.companyId}` : "Financial Freedom"))}
+                size="small"
+                sx={{
+                  fontWeight: 600,
+                  fontSize: "0.72rem",
+                  bgcolor: "#eef2ff",
+                  color: "#3730a3",
+                  border: "1px solid #c7d2fe",
+                  borderRadius: "6px",
+                  height: "24px",
+                  maxWidth: "140px",
+                  cursor: "default",
+                  "& .MuiChip-label": {
+                    px: 1,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }
+                }}
+              />
+            </Tooltip>
           </TableCell>
 
           {/* Source */}
