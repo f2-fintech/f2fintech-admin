@@ -278,6 +278,7 @@ const Ticket = () => {
       // Format the exported data
       const formattedData = exportData.data.results.map((t, index) => ({
         "Ticket ID": t?.ticketId || "-",
+        Channel: t?.companyName || "Financial Freedom",
         Name: t?.customerName || "-",
         Email: t?.customerEmail || "-",
         Amount: t?.applicationAmount || "-",
@@ -1068,6 +1069,19 @@ const Ticket = () => {
                             }}
                           >
                             T.ID
+                          </TableCell>
+                          <TableCell
+                            align="center"
+                            sx={{
+                              fontWeight: 600,
+                              color: "white",
+                              fontSize: { xs: "0.75rem", sm: "0.875rem", md: "0.95rem" },
+                              whiteSpace: "nowrap",
+                              minWidth: "110px",
+                              px: 1,
+                            }}
+                          >
+                            Channel
                           </TableCell>
                           <TableCell
                             align="center"
