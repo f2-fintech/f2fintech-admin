@@ -193,10 +193,29 @@ export function AppBarNav(): React.JSX.Element {
 
   const fetchCompanies = useCallback(async () => {
     try {
-      const res = await CompanyAPI.getAll({ page: 1, limit: 100, isActive: true });
+      const res = await CompanyAPI.getAll({ page: 1, limit: 1000, isActive: true });
       const results = res.data.results || [];
       // Extra safety: filter only active companies on client side too
-      const activeResults = results.filter((c: any) => c.isActive !== false);
+      let activeResults = results.filter((c: any) => c.isActive !== false);
+
+      // Ensure company 101 (Financial Freedom) is always included
+      const has101 = activeResults.some((c: any) => String(c.companyId) === "101");
+      if (!has101) {
+        activeResults.push({
+          id: 101,
+          companyId: 101,
+          name: "Financial Freedom",
+          isActive: true
+        });
+      }
+
+      // Sort companies: Keep 101 at the top, then sort alphabetically by name
+      activeResults.sort((a: any, b: any) => {
+        if (String(a.companyId) === "101") return -1;
+        if (String(b.companyId) === "101") return 1;
+        return (a.name || "").localeCompare(b.name || "");
+      });
+
       setCompanies(activeResults);
     } catch (error) {
       console.error("Failed to load companies", error);
@@ -688,15 +707,22 @@ export function AppBarNav(): React.JSX.Element {
                       const company = companies.find((c: any) => String(c.companyId) === String(selected));
                       if (company) {
                         return (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <BusinessRounded fontSize="small" sx={{ color: '#1976d2' }} />
-                            <Typography sx={{ fontWeight: 500, color: '#172B4D', fontSize: '0.9rem' }}>
-                              {capitalizeEachWord(company.name)}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                            <BusinessRounded fontSize="small" sx={{ color: '#1976d2', flexShrink: 0 }} />
+                            <Typography noWrap sx={{ fontWeight: 500, color: '#172B4D', fontSize: '0.9rem' }}>
+                              {capitalizeEachWord(company.name)} {company.companyId ? `(${company.companyId})` : ''}
                             </Typography>
                           </Box>
                         );
                       }
-                      return selected;
+                      return (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                          <BusinessRounded fontSize="small" sx={{ color: '#1976d2', flexShrink: 0 }} />
+                          <Typography noWrap sx={{ fontWeight: 500, color: '#172B4D', fontSize: '0.9rem' }}>
+                            {String(selected) === "101" ? "Financial Freedom (101)" : selected}
+                          </Typography>
+                        </Box>
+                      );
                     }}
                     sx={{
                       height: "40px",
@@ -763,12 +789,18 @@ export function AppBarNav(): React.JSX.Element {
                         border: !selectedCompany ? '2px solid #3949ab' : 'none',
                         borderRadius: !selectedCompany ? '8px' : 0,
                         margin: !selectedCompany ? '4px 8px' : 0,
-                        display: "all aggregators".includes(companySearchQuery.toLowerCase()) ? 'flex' : 'none'
+                        display: "all aggregators".includes(companySearchQuery.toLowerCase().trim()) ? 'flex' : 'none'
                       }}
                     >
                       All Aggregators
                     </MenuItem>
-                    {companies?.filter((company: any) => !companySearchQuery || company.name?.toLowerCase().includes(companySearchQuery.toLowerCase())).map((company: any, index: number) => {
+                    {companies?.filter((company: any) => {
+                      if (!companySearchQuery) return true;
+                      const q = companySearchQuery.toLowerCase().trim();
+                      const nameMatches = company.name?.toLowerCase().includes(q);
+                      const idMatches = String(company.companyId || "").includes(q);
+                      return nameMatches || idMatches;
+                    }).map((company: any, index: number) => {
                       const isSelected = selectedCompany === company.companyId?.toString();
                       return (
                         <MenuItem
@@ -791,6 +823,24 @@ export function AppBarNav(): React.JSX.Element {
                             <Typography sx={{ fontWeight: isSelected ? 600 : 500, fontSize: '0.9rem', color: isSelected ? '#1e293b' : '#334155' }}>
                               {capitalizeEachWord(company.name)}
                             </Typography>
+                            {company.companyId && (
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  ml: 'auto',
+                                  color: isSelected ? '#3949ab' : '#64748b',
+                                  fontWeight: 600,
+                                  bgcolor: isSelected ? '#e8eaf6' : 'white',
+                                  px: 1,
+                                  py: 0.3,
+                                  borderRadius: 1,
+                                  border: isSelected ? '1px solid #3949ab' : '1px solid #e2e8f0',
+                                  fontSize: '0.75rem'
+                                }}
+                              >
+                                {company.companyId}
+                              </Typography>
+                            )}
                           </Box>
                         </MenuItem>
                       );
