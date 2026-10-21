@@ -247,7 +247,7 @@ const HomeContent: React.FC = () => {
     try {
       const res = await CompanyAPI.getAll({
         page: 1,
-        limit: 100
+        limit: 1000
       });
 
       setCompanies(res.data.results || []);
