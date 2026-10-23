@@ -11,6 +11,7 @@ import ManageSearchRounded from "@mui/icons-material/ManageSearchRounded";
 import AdminPanelSettingsRounded from "@mui/icons-material/AdminPanelSettingsRounded";
 import PersonRounded from "@mui/icons-material/PersonRounded";
 import SupervisedUserCircleRounded from "@mui/icons-material/SupervisedUserCircleRounded";
+import SecurityRounded from "@mui/icons-material/SecurityRounded";
 
 export const navIcons: Record<string, React.ElementType> = {
   "chart-pie": SpeedRounded,
@@ -26,4 +27,6 @@ export const navIcons: Record<string, React.ElementType> = {
   "gear-six": AdminPanelSettingsRounded,
   "user": PersonRounded,
   "users": SupervisedUserCircleRounded,
+  "security": SecurityRounded,
+  "shield": SecurityRounded,
 };

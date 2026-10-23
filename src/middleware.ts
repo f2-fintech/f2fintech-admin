@@ -45,6 +45,11 @@ export async function middleware(request: NextRequest) {
           return NextResponse.redirect(new URL("/unauthorised", request.url));
         }
 
+        // Check if the user is trying to access /secured-loans
+        if (request.nextUrl.pathname.startsWith("/secured-loans") && role !== "admin") {
+          return NextResponse.redirect(new URL("/unauthorised", request.url));
+        }
+
         // Restrict credit users to only /ticket page
         if (role === "credit") {
           if (!request.nextUrl.pathname.startsWith("/ticket") || request.nextUrl.pathname.startsWith("/ticket/")) {

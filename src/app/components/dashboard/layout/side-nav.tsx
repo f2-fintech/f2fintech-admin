@@ -41,12 +41,13 @@ const BASE_COLOR   = "#1e3a5f";
 function filterForRole(items: NavItemConfig[], userRole: string): NavItemConfig[] {
   return items
     .filter((item) => {
+      if ((item.key === "securedLoans" || item.title === "Secured Loans") && userRole !== "admin") return false;
       if (userRole === "super admin") return ["Company", "Users", "Teams"].includes(item.title ?? "");
       if (userRole === "admin")       return !["Company"].includes(item.title ?? "");
       if (userRole === "sales")       return ["Dashboard", "Applications"].includes(item.title ?? "");
       if (userRole === "operations")  return item.title === "Applications";
       if (userRole === "credit")      return item.title === "Applications";
-      if (["Users", "Loan Provider", "Archived", "Company", "Teams"].includes(item.title ?? "")) return false;
+      if (["Users", "Loan Provider", "Archived", "Company", "Teams", "Secured Loans"].includes(item.title ?? "")) return false;
       return true;
     })
     .map((item) => {
