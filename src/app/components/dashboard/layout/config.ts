@@ -30,6 +30,12 @@ export const navItems: NavItemConfig[] = [
     ],
   },
   {
+    key: "securedLoans",
+    title: "Secured Loans",
+    href: "/secured-loans",
+    icon: "security",
+  },
+  {
     key: "users",
     title: "Users",
     href: "/users",
