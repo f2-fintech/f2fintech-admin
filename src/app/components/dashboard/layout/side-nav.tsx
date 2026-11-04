@@ -131,11 +131,11 @@ export function SideNav(): React.JSX.Element {
       {/* Nav items */}
       <Box component="nav" sx={{ flex: 1, overflowY: "auto", "&::-webkit-scrollbar": { display: "none" } }}>
         <Stack component="ul" spacing={0.5} sx={{ listStyle: "none", mt: 4, p: 0, px: "6px" }}>
-          {visibleItems.map((item) =>
-            item.items?.length ? (
-              <NavGroupItem key={item.key} item={item} pathname={pathname} collapsed={collapsed} />
+          {visibleItems.map(({ key, ...itemProps }) =>
+            itemProps.items?.length ? (
+              <NavGroupItem key={key} item={{ key, ...itemProps }} pathname={pathname} collapsed={collapsed} />
             ) : (
-              <NavItem key={item.key} {...item} pathname={pathname} collapsed={collapsed} />
+              <NavItem key={key} {...itemProps} pathname={pathname} collapsed={collapsed} />
             )
           )}
         </Stack>

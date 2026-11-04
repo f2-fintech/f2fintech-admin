@@ -30,6 +30,10 @@ export interface JoinedTicketData {
   approved_amount?: number;
   disbursed_at?: string | Date;
   disbursed_amount?: number;
+  gross_disbursed_amount?: number;
+  net_disbursed_amount?: number;
+  abnd_at?: string | Date;
+  abnd_amount?: number;
 }
 
 export interface Ticket {

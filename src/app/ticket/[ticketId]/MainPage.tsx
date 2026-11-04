@@ -67,10 +67,21 @@ const employeeStatusObj = [
   { value: "to be disbursed", label: "To Be Disbursed" },
   { value: "approved", label: "Approved" },
   { value: "disbursed", label: "Disbursed" },
+  { value: "abnd", label: "ABND (Approved But Not Disbursed)" },
   { value: "carry forward", label: "Carry Forward" },
   { value: "rejected", label: "Rejected" },
   { value: "drop", label: "Drop" },
   { value: "hold", label: "Hold" },
+];
+
+const COMMISSION_PRESETS = [
+  { label: "0.5%", value: "0.5" },
+  { label: "0.75%", value: "0.75" },
+  { label: "1%", value: "1" },
+  { label: "1.25%", value: "1.25" },
+  { label: "1.5%", value: "1.5" },
+  { label: "1.75%", value: "1.75" },
+  { label: "2%", value: "2" },
 ];
 
 const loanStatusOptions = [
@@ -79,6 +90,7 @@ const loanStatusOptions = [
   { value: "login", label: "Login" },
   { value: "approved", label: "Approved" },
   { value: "disbursed", label: "Disbursed" },
+  { value: "abnd", label: "ABND" },
   { value: "carry forward", label: "Carry Forward" },
   { value: "hold", label: "Hold" },
   { value: "drop", label: "Drop" },
@@ -100,6 +112,7 @@ export const getStatusColor = (status: string) => {
     "to be disbursed": { bg: "rgba(156, 39, 176, 0.1)", border: "#9c27b0", text: "#4a148c" },
     approved: { bg: "rgba(139, 195, 74, 0.15)", border: "#8bc34a", text: "#33691e" },
     disbursed: { bg: "rgba(0, 188, 212, 0.1)", border: "#00bcd4", text: "#006064" },
+    abnd: { bg: "rgba(100, 116, 139, 0.12)", border: "#64748b", text: "#1e293b" },
     "carry forward": { bg: "rgba(158, 158, 158, 0.1)", border: "#9e9e9e", text: "#424242" },
     rejected: { bg: "rgba(244, 67, 54, 0.1)", border: "#f44336", text: "#b71c1c" },
     drop: { bg: "rgba(255, 87, 34, 0.1)", border: "#ff5722", text: "#bf360c" },
@@ -216,7 +229,31 @@ const MainPage = () => {
     return !!ticketDetailData?.disbursed_at;
   });
 
-  // Disbursed Amount States
+  // Disbursed Amount States (Gross and Net)
+  const [grossDisbursedAmount, setGrossDisbursedAmount] = useState(() => {
+    return ticketDetailData?.gross_disbursed_amount
+      ? ticketDetailData.gross_disbursed_amount.toString()
+      : ticketDetailData?.disbursed_amount
+        ? ticketDetailData.disbursed_amount.toString()
+        : "";
+  });
+
+  const [isGrossDisbursedAmountSaved, setIsGrossDisbursedAmountSaved] = useState(() => {
+    return !!(ticketDetailData?.gross_disbursed_amount || ticketDetailData?.disbursed_amount);
+  });
+
+  const [netDisbursedAmount, setNetDisbursedAmount] = useState(() => {
+    return ticketDetailData?.net_disbursed_amount
+      ? ticketDetailData.net_disbursed_amount.toString()
+      : ticketDetailData?.disbursed_amount
+        ? ticketDetailData.disbursed_amount.toString()
+        : "";
+  });
+
+  const [isNetDisbursedAmountSaved, setIsNetDisbursedAmountSaved] = useState(() => {
+    return !!(ticketDetailData?.net_disbursed_amount || ticketDetailData?.disbursed_amount);
+  });
+
   const [disbursedAmount, setDisbursedAmount] = useState(() => {
     return ticketDetailData?.disbursed_amount
       ? ticketDetailData.disbursed_amount.toString()
@@ -226,6 +263,31 @@ const MainPage = () => {
   const [isDisbursedAmountSaved, setIsDisbursedAmountSaved] = useState(() => {
     return !!ticketDetailData?.disbursed_amount;
   });
+
+  // ABND States (Approved But Not Disbursed)
+  const [abndDate, setAbndDate] = useState(() => {
+    return ticketDetailData?.abnd_at
+      ? new Date(ticketDetailData.abnd_at).toISOString().split('T')[0]
+      : "";
+  });
+
+  const [isAbndDateSaved, setIsAbndDateSaved] = useState(() => {
+    return !!ticketDetailData?.abnd_at;
+  });
+
+  const [abndAmount, setAbndAmount] = useState(() => {
+    return ticketDetailData?.abnd_amount
+      ? ticketDetailData.abnd_amount.toString()
+      : ticketDetailData?.approved_amount
+        ? ticketDetailData.approved_amount.toString()
+        : "";
+  });
+
+  const [isAbndAmountSaved, setIsAbndAmountSaved] = useState(() => {
+    return !!ticketDetailData?.abnd_amount;
+  });
+
+  const [isSavingAbnd, setIsSavingAbnd] = useState<boolean>(false);
 
 
   // Add these state variables near your existing disbursed states
@@ -259,6 +321,25 @@ const MainPage = () => {
 
   const [isFixedCommissionPercentageSaved, setIsFixedCommissionPercentageSaved] = useState(() => {
     return !!ticketDetailData?.fixed_commission_percentage;
+  });
+
+  const [customCommissionAmount, setCustomCommissionAmount] = useState<string>(() => {
+    if (ticketDetailData?.fixed_commission_percentage && (ticketDetailData?.net_disbursed_amount || ticketDetailData?.disbursed_amount)) {
+      const net = parseFloat(ticketDetailData.net_disbursed_amount || ticketDetailData.disbursed_amount);
+      const pct = parseFloat(ticketDetailData.fixed_commission_percentage.toString());
+      if (net > 0 && pct > 0) {
+        return ((net * pct) / 100).toFixed(2);
+      }
+    }
+    return "";
+  });
+
+  const [isCustomCommissionSelected, setIsCustomCommissionSelected] = useState<boolean>(() => {
+    if (ticketDetailData?.fixed_commission_percentage) {
+      const val = ticketDetailData.fixed_commission_percentage.toString();
+      return !COMMISSION_PRESETS.some((p) => p.value === val);
+    }
+    return false;
   });
 
   // Format amount for display (removes unnecessary decimals)
@@ -427,12 +508,51 @@ const MainPage = () => {
             setIsDisbursedDateSaved(false);
           }
 
+          if (data.gross_disbursed_amount) {
+            setGrossDisbursedAmount(data.gross_disbursed_amount.toString());
+            setIsGrossDisbursedAmountSaved(true);
+          } else if (data.disbursed_amount) {
+            setGrossDisbursedAmount(data.disbursed_amount.toString());
+            setIsGrossDisbursedAmountSaved(true);
+          } else if (data.employeeStatus === "disbursed") {
+            setGrossDisbursedAmount(data.applicationAmount?.toString() || "");
+            setIsGrossDisbursedAmountSaved(false);
+          }
+
+          if (data.net_disbursed_amount) {
+            setNetDisbursedAmount(data.net_disbursed_amount.toString());
+            setIsNetDisbursedAmountSaved(true);
+          } else if (data.disbursed_amount) {
+            setNetDisbursedAmount(data.disbursed_amount.toString());
+            setIsNetDisbursedAmountSaved(true);
+          } else if (data.employeeStatus === "disbursed") {
+            setNetDisbursedAmount(data.applicationAmount?.toString() || "");
+            setIsNetDisbursedAmountSaved(false);
+          }
+
           if (data.disbursed_amount) {
             setDisbursedAmount(data.disbursed_amount.toString());
             setIsDisbursedAmountSaved(true);
           } else if (data.employeeStatus === "disbursed") {
             setDisbursedAmount(data.applicationAmount?.toString() || "");
             setIsDisbursedAmountSaved(false);
+          }
+
+          // Set ABND date/amount if ticket has them
+          if (data.abnd_at) {
+            setAbndDate(new Date(data.abnd_at).toISOString().split("T")[0]);
+            setIsAbndDateSaved(true);
+          } else if (data.employeeStatus === "abnd") {
+            setAbndDate(getTodayLocalDate());
+            setIsAbndDateSaved(false);
+          }
+
+          if (data.abnd_amount) {
+            setAbndAmount(data.abnd_amount.toString());
+            setIsAbndAmountSaved(true);
+          } else if (data.employeeStatus === "abnd") {
+            setAbndAmount(data.approved_amount?.toString() || data.applicationAmount?.toString() || "");
+            setIsAbndAmountSaved(false);
           }
 
           // Set approved date/amount if ticket has them
@@ -545,18 +665,21 @@ const MainPage = () => {
   }, [workLog?.data, timeLoggingEstimate.originalEstimate]);
 
   useEffect(() => {
-    if (ticketDetailData?.disbursed_amount) {
-      setDisbursedAmount(
-        Number(ticketDetailData.disbursed_amount) % 1 === 0
-          ? parseInt(ticketDetailData.disbursed_amount, 10).toString()
-          : ticketDetailData.disbursed_amount.toString()
-      );
-    } else if (ticketDetailData?.applicationAmount) {
-      setDisbursedAmount(
-        Number(ticketDetailData.applicationAmount) % 1 === 0
-          ? parseInt(ticketDetailData.applicationAmount, 10).toString()
-          : ticketDetailData.applicationAmount.toString()
-      );
+    const rawDisbursed = ticketDetailData?.gross_disbursed_amount || ticketDetailData?.disbursed_amount || ticketDetailData?.applicationAmount;
+    if (rawDisbursed) {
+      const formatted = Number(rawDisbursed) % 1 === 0 ? parseInt(rawDisbursed.toString(), 10).toString() : rawDisbursed.toString();
+      setDisbursedAmount(formatted);
+      setGrossDisbursedAmount(formatted);
+    }
+    const rawNet = ticketDetailData?.net_disbursed_amount || ticketDetailData?.disbursed_amount || ticketDetailData?.applicationAmount;
+    if (rawNet) {
+      const formatted = Number(rawNet) % 1 === 0 ? parseInt(rawNet.toString(), 10).toString() : rawNet.toString();
+      setNetDisbursedAmount(formatted);
+    }
+    const rawAbnd = ticketDetailData?.abnd_amount || ticketDetailData?.approved_amount || ticketDetailData?.applicationAmount;
+    if (rawAbnd) {
+      const formatted = Number(rawAbnd) % 1 === 0 ? parseInt(rawAbnd.toString(), 10).toString() : rawAbnd.toString();
+      setAbndAmount(formatted);
     }
   }, [ticketDetailData]);
 
@@ -630,20 +753,40 @@ const MainPage = () => {
       setCarryForwardMonth("");
     }
 
-    // Pre-fill date/amount defaults for approved / disbursed panels
+    // Pre-fill date/amount defaults for approved / disbursed / abnd panels
     if (newStatus === "disbursed") {
       if (!disbursedDate) setDisbursedDate(getTodayLocalDate());
-      if (!disbursedAmount && ticketDetailData?.applicationAmount)
-        setDisbursedAmount(ticketDetailData.applicationAmount.toString());
+      const defaultGross = ticketDetailData?.gross_disbursed_amount?.toString() || ticketDetailData?.disbursed_amount?.toString() || ticketDetailData?.applicationAmount?.toString() || "";
+      const defaultNet = ticketDetailData?.net_disbursed_amount?.toString() || defaultGross;
+      if (!grossDisbursedAmount) setGrossDisbursedAmount(defaultGross);
+      if (!netDisbursedAmount) setNetDisbursedAmount(defaultNet);
+      if (!disbursedAmount) setDisbursedAmount(defaultGross);
+      if (!fixedCommissionPercentage && ticketDetailData?.fixed_commission_percentage) {
+        const commPct = ticketDetailData.fixed_commission_percentage.toString();
+        setFixedCommissionPercentage(commPct);
+        const isPreset = COMMISSION_PRESETS.some((p) => p.value === commPct);
+        if (!isPreset) setIsCustomCommissionSelected(true);
+        if (defaultNet && parseFloat(defaultNet) > 0) {
+          setCustomCommissionAmount(((parseFloat(defaultNet) * parseFloat(commPct)) / 100).toFixed(2));
+        }
+      }
     }
     if (newStatus === "approved") {
       if (!approvedDate) setApprovedDate(getTodayLocalDate());
       if (!approvedAmount && ticketDetailData?.applicationAmount)
         setApprovedAmount(ticketDetailData.applicationAmount.toString());
     }
+    if (newStatus === "abnd") {
+      if (!abndDate) setAbndDate(getTodayLocalDate());
+      if (!abndAmount) {
+        const defaultAbnd = ticketDetailData?.abnd_amount?.toString() || ticketDetailData?.approved_amount?.toString() || ticketDetailData?.applicationAmount?.toString() || "";
+        setAbndAmount(defaultAbnd);
+      }
+    }
     // Clear unrelated date/amount fields
-    if (newStatus !== "disbursed") { setDisbursedDate(""); setDisbursedAmount(""); }
+    if (newStatus !== "disbursed") { setDisbursedDate(""); setGrossDisbursedAmount(""); setNetDisbursedAmount(""); setDisbursedAmount(""); }
     if (newStatus !== "approved") { setApprovedDate(""); setApprovedAmount(""); }
+    if (newStatus !== "abnd") { setAbndDate(""); setAbndAmount(""); }
   };
 
   /** Cancels a pending status change and restores the dropdown to the last saved status. */
@@ -659,10 +802,30 @@ const MainPage = () => {
       setDisbursedDate(new Date(ticketDetailData.disbursed_at).toISOString().split("T")[0]);
       setIsDisbursedDateSaved(true);
     } else { setDisbursedDate(""); }
-    if (ticketDetailData?.disbursed_amount) {
-      setDisbursedAmount(ticketDetailData.disbursed_amount.toString());
+    if (ticketDetailData?.gross_disbursed_amount || ticketDetailData?.disbursed_amount) {
+      const amt = (ticketDetailData.gross_disbursed_amount || ticketDetailData.disbursed_amount).toString();
+      setGrossDisbursedAmount(amt);
+      setDisbursedAmount(amt);
+      setIsGrossDisbursedAmountSaved(true);
       setIsDisbursedAmountSaved(true);
-    } else { setDisbursedAmount(""); }
+    } else { setGrossDisbursedAmount(""); setDisbursedAmount(""); }
+    if (ticketDetailData?.net_disbursed_amount || ticketDetailData?.disbursed_amount) {
+      const amt = (ticketDetailData.net_disbursed_amount || ticketDetailData.disbursed_amount).toString();
+      setNetDisbursedAmount(amt);
+      setIsNetDisbursedAmountSaved(true);
+    } else { setNetDisbursedAmount(""); }
+    if (ticketDetailData?.fixed_commission_percentage) {
+      const commVal = ticketDetailData.fixed_commission_percentage.toString();
+      setFixedCommissionPercentage(commVal);
+      setIsFixedCommissionPercentageSaved(true);
+      const isPreset = COMMISSION_PRESETS.some((p) => p.value === commVal);
+      setIsCustomCommissionSelected(!isPreset);
+    } else {
+      setFixedCommissionPercentage("");
+      setIsFixedCommissionPercentageSaved(false);
+      setIsCustomCommissionSelected(false);
+      setCustomCommissionAmount("");
+    }
     if (ticketDetailData?.approved_at) {
       setApprovedDate(new Date(ticketDetailData.approved_at).toISOString().split("T")[0]);
       setIsApprovedDateSaved(true);
@@ -671,6 +834,14 @@ const MainPage = () => {
       setApprovedAmount(ticketDetailData.approved_amount.toString());
       setIsApprovedAmountSaved(true);
     } else { setApprovedAmount(""); }
+    if (ticketDetailData?.abnd_at) {
+      setAbndDate(new Date(ticketDetailData.abnd_at).toISOString().split("T")[0]);
+      setIsAbndDateSaved(true);
+    } else { setAbndDate(""); }
+    if (ticketDetailData?.abnd_amount) {
+      setAbndAmount(ticketDetailData.abnd_amount.toString());
+      setIsAbndAmountSaved(true);
+    } else { setAbndAmount(""); }
   };
 
   /** Handles file input for the status-change mandatory attachment. */
@@ -778,8 +949,20 @@ const MainPage = () => {
       toastAndNavigate(dispatch, true, "error", "Please enter disbursement date");
       return;
     }
-    if (!disbursedAmount || parseInt(disbursedAmount, 10) <= 0) {
-      toastAndNavigate(dispatch, true, "error", "Please enter a valid disbursement amount");
+    const grossVal = parseFloat(grossDisbursedAmount || disbursedAmount || "0");
+    const netVal = parseFloat(netDisbursedAmount || disbursedAmount || "0");
+    const commPctVal = parseFloat(fixedCommissionPercentage || "0");
+
+    if (isNaN(grossVal) || grossVal <= 0) {
+      toastAndNavigate(dispatch, true, "error", "Please enter a valid gross disbursement amount");
+      return;
+    }
+    if (isNaN(netVal) || netVal <= 0) {
+      toastAndNavigate(dispatch, true, "error", "Please enter a valid net disbursement amount");
+      return;
+    }
+    if (isNaN(commPctVal) || commPctVal <= 0) {
+      toastAndNavigate(dispatch, true, "error", "Please select or enter a valid fixed commission percentage (> 0)");
       return;
     }
     setIsSavingDisbursement(true);
@@ -807,14 +990,15 @@ const MainPage = () => {
       const updatePayload: Record<string, unknown> = {
         status: "disbursed",
         disbursed_at: disbursedDate,
-        disbursed_amount: parseFloat(disbursedAmount),
+        gross_disbursed_amount: grossVal,
+        net_disbursed_amount: netVal,
+        disbursed_amount: grossVal,
+        fixed_commission_percentage: commPctVal,
         actorName: decodedToken()?.username || 'A user'
       };
       if (cashbackAmount && parseFloat(cashbackAmount) >= 0)
         updatePayload.cashback_amount = parseFloat(cashbackAmount);
       if (caseType) updatePayload.case_type = caseType;
-      if (fixedCommissionPercentage && parseFloat(fixedCommissionPercentage) >= 0)
-        updatePayload.fixed_commission_percentage = parseFloat(fixedCommissionPercentage);
       await modifyTicket(+ticketId, updatePayload);
 
       // 3. Trigger commission
@@ -829,11 +1013,9 @@ const MainPage = () => {
 
       // 4. Ticket history
       const loggedInUser = decodedToken()?.username;
-      let historyMessage = `${loggedInUser} set disbursement details - Date: ${disbursedDate}, Amount: ${disbursedAmount}`;
+      let historyMessage = `${loggedInUser} set disbursement details - Date: ${disbursedDate}, Gross: ${grossVal}, Net: ${netVal}, Fixed Commission: ${commPctVal}%`;
       if (cashbackAmount && parseFloat(cashbackAmount) >= 0) historyMessage += `, Cashback: ${cashbackAmount}`;
       if (caseType) historyMessage += `, Case Type: ${caseType}`;
-      if (fixedCommissionPercentage && parseFloat(fixedCommissionPercentage) >= 0)
-        historyMessage += `, Fixed Commission: ${fixedCommissionPercentage}%`;
       await createTicketHistory({ ticket_id: ticketId, action: historyMessage });
 
       // 5. Save mandatory comment to ticket_activities
@@ -846,6 +1028,8 @@ const MainPage = () => {
 
       // 6. Update saved flags and reset comment state
       setIsDisbursedDateSaved(true);
+      setIsGrossDisbursedAmountSaved(true);
+      setIsNetDisbursedAmountSaved(true);
       setIsDisbursedAmountSaved(true);
       if (cashbackAmount && parseFloat(cashbackAmount) >= 0) setIsCashbackAmountSaved(true);
       if (fixedCommissionPercentage && parseFloat(fixedCommissionPercentage) >= 0)
@@ -864,6 +1048,82 @@ const MainPage = () => {
       toastAndNavigate(dispatch, true, "error", "Error saving disbursement details");
     } finally {
       setIsSavingDisbursement(false);
+    }
+  };
+
+  // Combined handler for ABND date, amount, and mandatory comment
+  const handleCombinedAbndSubmit = async () => {
+    if (!requireExpectedDate()) return;
+    if (!statusChangeComment.trim()) {
+      toastAndNavigate(dispatch, true, "error", "A comment is required to change status to ABND");
+      return;
+    }
+    const abndVal = parseFloat(abndAmount || "0");
+    if (isNaN(abndVal) || abndVal <= 0) {
+      toastAndNavigate(dispatch, true, "error", "Please enter a valid ABND amount");
+      return;
+    }
+    setIsSavingAbnd(true);
+    try {
+      // 1. Optional attachment upload
+      let attachmentUrl: string | null = null;
+      if (statusChangeAttachment) {
+        try {
+          const formData = new FormData();
+          formData.append("document", statusChangeAttachment);
+          formData.append("folder", `comment/${statusChangeAttachment.name}`);
+          const res = await axiosInstance.post(
+            `${process.env.NEXT_PUBLIC_WEB_URL}/upload-to-s3`,
+            formData,
+            { headers: { "Content-Type": "multipart/form-data" } }
+          );
+          attachmentUrl = res.data.data as string;
+        } catch {
+          toastAndNavigate(dispatch, true, "error", "Error uploading attachment");
+          return;
+        }
+      }
+
+      // 2. Update ticket
+      const targetDate = abndDate || getTodayLocalDate();
+      const updatePayload: Record<string, unknown> = {
+        status: "abnd",
+        abnd_at: targetDate,
+        abnd_amount: abndVal,
+        actorName: decodedToken()?.username || 'A user'
+      };
+      await modifyTicket(+ticketId, updatePayload);
+
+      // 3. Ticket history
+      const loggedInUser = decodedToken()?.username;
+      const historyMessage = `${loggedInUser} set ABND (Approved But Not Disbursed) details - Date: ${targetDate}, Amount: ${abndVal}`;
+      await createTicketHistory({ ticket_id: ticketId, action: historyMessage });
+
+      // 4. Save mandatory comment to ticket_activities
+      await createTicketActivity({
+        ticket_id: ticketId,
+        user_id: decodedToken()?.id,
+        comment: statusChangeComment,
+        attachment: attachmentUrl,
+      });
+
+      // 5. Update saved flags and reset comment state
+      setIsAbndDateSaved(true);
+      setIsAbndAmountSaved(true);
+      setNewEmployeeStatus("abnd");
+      setPendingNewStatus("");
+      setShowStatusCommentBox(false);
+      setStatusChangeComment("");
+      setStatusChangeAttachment(null);
+      setStatusChangeAttachmentPreview("");
+
+      toastAndNavigate(dispatch, true, "info", "ABND details saved successfully");
+      await refetch();
+      await fetchTicketDetails();
+    } catch {
+      toastAndNavigate(dispatch, true, "error", "Error saving ABND details");
+    } finally {
+      setIsSavingAbnd(false);
     }
   };
 
@@ -1765,9 +2025,9 @@ const MainPage = () => {
                     </Box>
                   )}
 
-                  {/* Slide-in mandatory comment box — only for non-approved/disbursed statuses */}
+                  {/* Slide-in mandatory comment box — only for non-approved/disbursed/abnd statuses */}
                   <Collapse
-                    in={showStatusCommentBox && pendingNewStatus !== "approved" && pendingNewStatus !== "disbursed"}
+                    in={showStatusCommentBox && pendingNewStatus !== "approved" && pendingNewStatus !== "disbursed" && pendingNewStatus !== "abnd"}
                     timeout={300}
                     unmountOnExit
                   >
@@ -1994,18 +2254,47 @@ const MainPage = () => {
                       />
 
                       {/* Fixed Commission Percentage Field */}
-                      <TextField
-                        fullWidth
-                        type="number"
-                        label="Fixed Commission Percentage"
-                        placeholder="Enter fixed commission percentage"
-                        value={fixedCommissionPercentage}
-                        onChange={(e) => setFixedCommissionPercentage(e.target.value)}
-                        variant="outlined"
-                        size="small"
-                        InputLabelProps={{ shrink: true }}
-                        sx={panelFieldStyles}
-                      />
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8 }}>
+                        <Typography sx={{ fontSize: '0.78rem', fontWeight: 600, color: '#334155' }}>
+                          Fixed Commission Percentage ( % )
+                        </Typography>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.8 }}>
+                          {COMMISSION_PRESETS.map((preset) => {
+                            const isSelected = parseFloat(fixedCommissionPercentage || "0") === parseFloat(preset.value);
+                            return (
+                              <Chip
+                                key={preset.value}
+                                label={preset.label}
+                                size="small"
+                                clickable
+                                onClick={() => setFixedCommissionPercentage(preset.value)}
+                                sx={{
+                                  fontSize: '0.74rem',
+                                  fontWeight: isSelected ? 700 : 500,
+                                  bgcolor: isSelected ? '#3949ab' : '#f1f5f9',
+                                  color: isSelected ? '#ffffff' : '#334155',
+                                  border: isSelected ? '1px solid #3949ab' : '1px solid #cbd5e1',
+                                  cursor: 'pointer',
+                                  '&:hover': { bgcolor: isSelected ? '#303f9f' : '#e2e8f0' },
+                                }}
+                              />
+                            );
+                          })}
+                        </Box>
+                        <TextField
+                          fullWidth
+                          type="number"
+                          label="Fixed Commission Percentage ( % )"
+                          placeholder="Enter fixed commission percentage"
+                          value={fixedCommissionPercentage}
+                          onChange={(e) => setFixedCommissionPercentage(e.target.value)}
+                          variant="outlined"
+                          size="small"
+                          InputLabelProps={{ shrink: true }}
+                          inputProps={{ step: "0.01", min: "0" }}
+                          sx={panelFieldStyles}
+                        />
+                      </Box>
 
                       {/* Mandatory comment box — inside approved panel */}
                       <Box sx={{ position: 'relative' }}>
@@ -2168,14 +2457,38 @@ const MainPage = () => {
                         sx={panelFieldStyles}
                       />
 
-                      {/* Amount Field */}
+                      {/* Gross Disbursal Amount */}
                       <TextField
                         fullWidth
                         type="number"
-                        label="Amount"
-                        placeholder="Enter amount"
-                        value={disbursedAmount}
-                        onChange={(e) => setDisbursedAmount(e.target.value)}
+                        label="Gross Disbursal Amount *"
+                        placeholder="Enter gross disbursal amount"
+                        value={grossDisbursedAmount}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setGrossDisbursedAmount(val);
+                          setDisbursedAmount(val);
+                        }}
+                        variant="outlined"
+                        size="small"
+                        InputLabelProps={{ shrink: true }}
+                        sx={panelFieldStyles}
+                      />
+
+                      {/* Net Disbursal Amount */}
+                      <TextField
+                        fullWidth
+                        type="number"
+                        label="Net Disbursal Amount *"
+                        placeholder="Enter net disbursal amount"
+                        value={netDisbursedAmount}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNetDisbursedAmount(val);
+                          if (val && parseFloat(val) > 0 && fixedCommissionPercentage && parseFloat(fixedCommissionPercentage) > 0) {
+                            setCustomCommissionAmount(((parseFloat(val) * parseFloat(fixedCommissionPercentage)) / 100).toFixed(2));
+                          }
+                        }}
                         variant="outlined"
                         size="small"
                         InputLabelProps={{ shrink: true }}
@@ -2209,19 +2522,146 @@ const MainPage = () => {
                         placeholder="Select Case Type"
                       />
 
-                      {/* Fixed Commission Percentage Field */}
-                      <TextField
-                        fullWidth
-                        type="number"
-                        label="Fixed Commission Percentage ( % )"
-                        placeholder="Enter fixed commission percentage"
-                        value={fixedCommissionPercentage}
-                        onChange={(e) => setFixedCommissionPercentage(e.target.value)}
-                        variant="outlined"
-                        size="small"
-                        InputLabelProps={{ shrink: true }}
-                        sx={panelFieldStyles}
-                      />
+                      {/* Fixed Commission Percentage Section */}
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Typography sx={{ fontSize: '0.78rem', fontWeight: 600, color: '#334155' }}>
+                            Fixed Commission Percentage ( % ) *
+                          </Typography>
+                          {fixedCommissionPercentage && parseFloat(fixedCommissionPercentage) > 0 && netDisbursedAmount && parseFloat(netDisbursedAmount) > 0 && (
+                            <Typography
+                              sx={{
+                                fontSize: '0.72rem',
+                                fontWeight: 600,
+                                color: '#059669',
+                                bgcolor: '#ecfdf5',
+                                px: 1,
+                                py: 0.25,
+                                borderRadius: '4px',
+                                border: '1px solid #a7f3d0',
+                              }}
+                            >
+                              Est. Commission: ₹{((parseFloat(netDisbursedAmount) * parseFloat(fixedCommissionPercentage)) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                            </Typography>
+                          )}
+                        </Box>
+
+                        {/* Suggestions List */}
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.8, my: 0.2 }}>
+                          {COMMISSION_PRESETS.map((preset) => {
+                            const isSelected = !isCustomCommissionSelected && parseFloat(fixedCommissionPercentage || "0") === parseFloat(preset.value);
+                            return (
+                              <Chip
+                                key={preset.value}
+                                label={preset.label}
+                                size="small"
+                                clickable
+                                onClick={() => {
+                                  setIsCustomCommissionSelected(false);
+                                  setFixedCommissionPercentage(preset.value);
+                                  if (netDisbursedAmount && parseFloat(netDisbursedAmount) > 0) {
+                                    setCustomCommissionAmount(((parseFloat(netDisbursedAmount) * parseFloat(preset.value)) / 100).toFixed(2));
+                                  }
+                                }}
+                                sx={{
+                                  fontSize: '0.75rem',
+                                  fontWeight: isSelected ? 700 : 500,
+                                  bgcolor: isSelected ? '#3949ab' : '#f1f5f9',
+                                  color: isSelected ? '#ffffff' : '#334155',
+                                  border: isSelected ? '1px solid #3949ab' : '1px solid #cbd5e1',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease',
+                                  '&:hover': {
+                                    bgcolor: isSelected ? '#303f9f' : '#e2e8f0',
+                                  },
+                                }}
+                              />
+                            );
+                          })}
+
+                          {/* Custom Amount Chip */}
+                          <Chip
+                            label="Custom Amount"
+                            size="small"
+                            clickable
+                            onClick={() => {
+                              setIsCustomCommissionSelected(true);
+                            }}
+                            sx={{
+                              fontSize: '0.75rem',
+                              fontWeight: isCustomCommissionSelected || (fixedCommissionPercentage && !COMMISSION_PRESETS.some(p => parseFloat(p.value) === parseFloat(fixedCommissionPercentage))) ? 700 : 500,
+                              bgcolor: isCustomCommissionSelected || (fixedCommissionPercentage && !COMMISSION_PRESETS.some(p => parseFloat(p.value) === parseFloat(fixedCommissionPercentage))) ? '#3949ab' : '#f1f5f9',
+                              color: isCustomCommissionSelected || (fixedCommissionPercentage && !COMMISSION_PRESETS.some(p => parseFloat(p.value) === parseFloat(fixedCommissionPercentage))) ? '#ffffff' : '#334155',
+                              border: isCustomCommissionSelected || (fixedCommissionPercentage && !COMMISSION_PRESETS.some(p => parseFloat(p.value) === parseFloat(fixedCommissionPercentage))) ? '1px solid #3949ab' : '1px solid #cbd5e1',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                              '&:hover': {
+                                bgcolor: isCustomCommissionSelected || (fixedCommissionPercentage && !COMMISSION_PRESETS.some(p => parseFloat(p.value) === parseFloat(fixedCommissionPercentage))) ? '#303f9f' : '#e2e8f0',
+                              },
+                            }}
+                          />
+                        </Box>
+
+                        {/* Input Fields */}
+                        <Grid container spacing={1}>
+                          <Grid item xs={isCustomCommissionSelected || (fixedCommissionPercentage && !COMMISSION_PRESETS.some(p => parseFloat(p.value) === parseFloat(fixedCommissionPercentage))) ? 6 : 12}>
+                            <TextField
+                              fullWidth
+                              type="number"
+                              label="Commission Percentage ( % ) *"
+                              placeholder="e.g. 1.25"
+                              value={fixedCommissionPercentage}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setFixedCommissionPercentage(val);
+                                const matchesPreset = COMMISSION_PRESETS.some(p => parseFloat(p.value) === parseFloat(val || "0"));
+                                if (!matchesPreset) {
+                                  setIsCustomCommissionSelected(true);
+                                }
+                                if (val && netDisbursedAmount && parseFloat(netDisbursedAmount) > 0) {
+                                  setCustomCommissionAmount(((parseFloat(netDisbursedAmount) * parseFloat(val)) / 100).toFixed(2));
+                                } else {
+                                  setCustomCommissionAmount("");
+                                }
+                              }}
+                              variant="outlined"
+                              size="small"
+                              InputLabelProps={{ shrink: true }}
+                              inputProps={{ step: "0.01", min: "0" }}
+                              sx={panelFieldStyles}
+                            />
+                          </Grid>
+                          {(isCustomCommissionSelected || (fixedCommissionPercentage && !COMMISSION_PRESETS.some(p => parseFloat(p.value) === parseFloat(fixedCommissionPercentage)))) && (
+                            <Grid item xs={6}>
+                              <TextField
+                                fullWidth
+                                type="number"
+                                label="Custom Amount ( ₹ )"
+                                placeholder="Enter amount"
+                                value={customCommissionAmount}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setCustomCommissionAmount(val);
+                                  if (val && netDisbursedAmount && parseFloat(netDisbursedAmount) > 0) {
+                                    const pct = (parseFloat(val) / parseFloat(netDisbursedAmount)) * 100;
+                                    setFixedCommissionPercentage(parseFloat(pct.toFixed(4)).toString());
+                                  }
+                                }}
+                                variant="outlined"
+                                size="small"
+                                InputLabelProps={{ shrink: true }}
+                                inputProps={{ min: "0" }}
+                                helperText={
+                                  !netDisbursedAmount || parseFloat(netDisbursedAmount) <= 0
+                                    ? "Enter net amount first to auto-calculate %"
+                                    : undefined
+                                }
+                                sx={panelFieldStyles}
+                              />
+                            </Grid>
+                          )}
+                        </Grid>
+                      </Box>
 
                       {/* Mandatory comment box — inside disbursed panel */}
                       <Box sx={{ position: 'relative' }}>
@@ -2302,7 +2742,11 @@ const MainPage = () => {
                         >
                           Cancel
                         </Button>
-                        <Tooltip title="Submit disbursement details and finalize status">
+                        <Tooltip title={
+                          !fixedCommissionPercentage || parseFloat(fixedCommissionPercentage) <= 0
+                            ? "Please enter or select a fixed commission percentage"
+                            : "Submit disbursement details and finalize status"
+                        }>
                           <span>
                             <Button
                               variant="contained"
@@ -2312,8 +2756,12 @@ const MainPage = () => {
                                 isSavingDisbursement ||
                                 !statusChangeComment.trim() ||
                                 !disbursedDate ||
-                                !(disbursedAmount || ticketDetailData?.applicationAmount) ||
-                                parseFloat(disbursedAmount || ticketDetailData?.applicationAmount || 0) <= 0
+                                !grossDisbursedAmount ||
+                                parseFloat(grossDisbursedAmount) <= 0 ||
+                                !netDisbursedAmount ||
+                                parseFloat(netDisbursedAmount) <= 0 ||
+                                !fixedCommissionPercentage ||
+                                parseFloat(fixedCommissionPercentage) <= 0
                               }
                               startIcon={isSavingDisbursement ? <CircularProgress size={14} color="inherit" /> : null}
                               sx={{
@@ -2331,6 +2779,180 @@ const MainPage = () => {
                               }}
                             >
                               {isSavingDisbursement ? "Saving..." : "Save"}
+                            </Button>
+                          </span>
+                        </Tooltip>
+                      </Box>
+                    </Box>
+                  )}
+
+                  {/* ABND Details Panel — shown while pending or after confirmed */}
+                  {(pendingNewStatus === "abnd" || newEmployeeStatus === "abnd") && (
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: { xs: 1, sm: 1.5, md: 2 },
+                        p: { xs: 1.5, sm: 2 },
+                        borderRadius: { xs: 1.5, sm: 2 },
+                        bgcolor: 'var(--mui-palette-neutral-50)',
+                        border: '1px solid var(--mui-palette-neutral-200)',
+                        mb: { xs: 1.5, sm: 2 },
+                        transition: 'all 0.3s ease',
+                      }}
+                    >
+                      {/* Title */}
+                      <Typography
+                        variant="subtitle1"
+                        align="center"
+                        sx={{
+                          color: 'text.primary',
+                          fontWeight: 'bold',
+                          fontSize: {
+                            xs: '0.8rem',
+                            sm: '0.9rem',
+                            md: '1rem',
+                          },
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        ABND Details (Approved But Not Disbursed)
+                      </Typography>
+
+                      {/* Date Field */}
+                      <TextField
+                        fullWidth
+                        type="date"
+                        label="Date"
+                        value={abndDate}
+                        onChange={(e) => setAbndDate(e.target.value)}
+                        variant="outlined"
+                        size="small"
+                        InputLabelProps={{ shrink: true }}
+                        sx={panelFieldStyles}
+                      />
+
+                      {/* Amount Field */}
+                      <TextField
+                        fullWidth
+                        type="number"
+                        label="ABND Amount *"
+                        placeholder="Enter ABND amount"
+                        value={abndAmount}
+                        onChange={(e) => setAbndAmount(e.target.value)}
+                        variant="outlined"
+                        size="small"
+                        InputLabelProps={{ shrink: true }}
+                        sx={panelFieldStyles}
+                      />
+
+                      {/* Mandatory comment box — inside abnd panel */}
+                      <Box sx={{ position: 'relative' }}>
+                        <TextField
+                          fullWidth
+                          multiline
+                          rows={3}
+                          placeholder="Add a comment for this status change... *"
+                          value={statusChangeComment}
+                          onChange={(e) => setStatusChangeComment(e.target.value)}
+                          variant="outlined"
+                          size="small"
+                          label="Comment (required)"
+                          InputLabelProps={{ shrink: true }}
+                          sx={{
+                            ...panelFieldStyles,
+                            '& .MuiOutlinedInput-root': {
+                              ...panelFieldStyles['& .MuiOutlinedInput-root'],
+                              pr: '40px',
+                            },
+                          }}
+                        />
+                        <Tooltip title="Add attachment">
+                          <IconButton
+                            component="label"
+                            size="small"
+                            sx={{ position: 'absolute', bottom: 6, right: 4 }}
+                          >
+                            <AttachFileIcon fontSize="small" />
+                            <input type="file" hidden onChange={handleStatusAttachmentChange} />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+
+                      {statusChangeAttachment && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {statusChangeAttachmentPreview && (
+                            <Box
+                              component="img"
+                              src={statusChangeAttachmentPreview}
+                              alt="Preview"
+                              sx={{ maxHeight: 60, maxWidth: 60, borderRadius: 1 }}
+                            />
+                          )}
+                          <Typography variant="caption" sx={{ flexGrow: 1, wordBreak: 'break-all' }}>
+                            {statusChangeAttachment.name}
+                          </Typography>
+                          <IconButton
+                            size="small"
+                            onClick={() => { setStatusChangeAttachment(null); setStatusChangeAttachmentPreview(""); }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      )}
+
+                      {/* Save Button */}
+                      <Box display="flex" justifyContent="space-between" alignItems="center" mt={1}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={handleCancelStatusChange}
+                          sx={{
+                            fontSize: '0.78rem',
+                            fontWeight: 600,
+                            textTransform: 'none',
+                            color: '#64748b',
+                            borderColor: '#cbd5e1',
+                            borderRadius: '6px',
+                            px: 1.8,
+                            py: 0.4,
+                            '&:hover': {
+                              bgcolor: '#f1f5f9',
+                              borderColor: '#94a3b8',
+                              color: '#0f172a',
+                            },
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                        <Tooltip title="Submit ABND details and update status">
+                          <span>
+                            <Button
+                              variant="contained"
+                              size="small"
+                              onClick={handleCombinedAbndSubmit}
+                              disabled={
+                                isSavingAbnd ||
+                                !statusChangeComment.trim() ||
+                                !abndAmount ||
+                                parseFloat(abndAmount) <= 0
+                              }
+                              startIcon={isSavingAbnd ? <CircularProgress size={14} color="inherit" /> : null}
+                              sx={{
+                                bgcolor: '#3949ab',
+                                color: '#ffffff',
+                                fontSize: '0.78rem',
+                                fontWeight: 600,
+                                textTransform: 'none',
+                                borderRadius: '6px',
+                                px: 2,
+                                py: 0.45,
+                                boxShadow: 'none',
+                                '&:hover': { bgcolor: '#303f9f', boxShadow: 'none' },
+                                '&:disabled': { bgcolor: '#cbd5e1', color: '#94a3b8' },
+                              }}
+                            >
+                              {isSavingAbnd ? "Saving..." : "Save"}
                             </Button>
                           </span>
                         </Tooltip>

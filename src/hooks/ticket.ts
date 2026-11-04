@@ -44,6 +44,9 @@ export const useGetTickets = (
       count: number;
       pages: number;
       totalDisbursedAmount?: number;
+      totalGrossDisbursedAmount?: number;
+      totalNetDisbursedAmount?: number;
+      totalAbndAmount?: number;
     };
   }>(
     fullPath,
@@ -64,7 +67,10 @@ export const useGetTickets = (
       results: [],
       count: 0,
       pages: 0,
-      totalDisbursedAmount: 0
+      totalDisbursedAmount: 0,
+      totalGrossDisbursedAmount: 0,
+      totalNetDisbursedAmount: 0,
+      totalAbndAmount: 0
     },
     swrLoading: !error && !swrData && isValidating,
     error,

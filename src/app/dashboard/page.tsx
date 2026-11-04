@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   AccountBalanceRounded,
+  AccountBalanceWalletRounded,
   CancelRounded,
   DeleteForeverRounded,
   PauseCircleOutlineRounded,
@@ -12,6 +13,7 @@ import {
   ThumbUpRounded,
   LoginRounded,
   ForwardRounded,
+  FactCheckRounded,
   ExpandLess,
   ExpandMore,
 } from "@mui/icons-material";
@@ -113,7 +115,7 @@ async function fetchTotalTickets(
   month?: string,
   year?: string,
   companyId?: string,
-): Promise<number | { count: number; amount: number }> {
+): Promise<number | { count: number; amount: number; grossAmount?: number; netAmount?: number }> {
   try {
     const params: any = {};
 
@@ -143,10 +145,25 @@ async function fetchTotalTickets(
 
     const response = await axiosInstance.get("/dashboard/tickets/count", { params });
 
-    if (status === "disbursed" || status === "approved") {
+    if (status === "disbursed") {
+      const data = response.data.data;
+      const count = typeof data === "object" ? (data.count || 0) : 0;
+      const amount = typeof data === "object" ? (data.amount || 0) : 0;
+      const grossAmount = typeof data === "object" ? (data.grossAmount ?? amount) : amount;
+      const netAmount = typeof data === "object" ? (data.netAmount ?? amount) : amount;
       return {
-        count: response.data.data.count || 0,
-        amount: response.data.data.amount || 0,
+        count,
+        amount,
+        grossAmount,
+        netAmount,
+      };
+    }
+
+    if (status === "approved" || status === "abnd") {
+      const data = response.data.data;
+      return {
+        count: typeof data === "object" ? (data.count || 0) : (data || 0),
+        amount: typeof data === "object" ? (data.amount || 0) : 0,
       };
     }
 
@@ -339,6 +356,7 @@ function SubAdminDashboard() {
   const [newApps, setNewApps] = useState<any>({});
   const [approvedData, setApprovedData] = useState<any>({});
   const [disbursedData, setDisbursedData] = useState<any>({});
+  const [abndData, setAbndData] = useState<any>({});
 
   const currentYear = new Date().getFullYear();
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
@@ -422,18 +440,20 @@ function SubAdminDashboard() {
           }
         }
 
-        const [aggCounts, apps, freshApps, approved, disbursed] = await Promise.all([
+        const [aggCounts, apps, freshApps, approved, disbursed, abnd] = await Promise.all([
           fetchAggregateTicketCounts(date || undefined, selectedMonth || undefined, selectedMonth ? currentYear.toString() : undefined, activeUserId),
           fetchTotalApplications(), // ALWAYS show all time
           fetchTotalNewApplication(selectedMonth || undefined, selectedMonth ? currentYear : undefined, date || undefined),
           fetchTotalTickets("approved", activeUserId, role, date || undefined, selectedMonth || undefined, selectedMonth ? currentYear.toString() : undefined),
-          fetchTotalTickets("disbursed", activeUserId, role, date || undefined, selectedMonth || undefined, selectedMonth ? currentYear.toString() : undefined)
+          fetchTotalTickets("disbursed", activeUserId, role, date || undefined, selectedMonth || undefined, selectedMonth ? currentYear.toString() : undefined),
+          fetchTotalTickets("abnd", activeUserId, role, date || undefined, selectedMonth || undefined, selectedMonth ? currentYear.toString() : undefined),
         ]);
         setCounts(aggCounts || {});
         setTotalApps(apps || 0);
         setNewApps(freshApps || {});
         setApprovedData(typeof approved === 'object' && approved !== null ? approved : { count: approved, amount: null });
         setDisbursedData(typeof disbursed === 'object' && disbursed !== null ? disbursed : { count: disbursed, amount: null });
+        setAbndData(typeof abnd === 'object' && abnd !== null ? abnd : { count: abnd, amount: null });
       } catch (err) {
         console.error(err);
       }
@@ -559,16 +579,46 @@ function SubAdminDashboard() {
         Final Outcomes
       </Typography>
       <Grid container spacing={2} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3} lg={3}>
+        <Grid item xs={12} sm={6} md={4} lg={4}>
           <StatCard title="Approved" value={approvedData.count || 0} amount={approvedData.amount} icon={AccountBalanceRounded} color="#69f0ae" link={getLink('approved')} tooltip="Funds Approved" />
         </Grid>
-        <Grid item xs={12} sm={6} md={3} lg={3}>
-          <StatCard title="Disbursed" value={disbursedData.count || 0} amount={disbursedData.amount} icon={ReportRounded} color="#ff9800" link={getLink('disbursed')} tooltip="Funds Disbursed" />
+        <Grid item xs={12} sm={6} md={4} lg={4}>
+          <StatCard
+            title="Gross Disbursed"
+            value={disbursedData.count || 0}
+            amount={disbursedData.grossAmount ?? disbursedData.amount}
+            icon={ReportRounded}
+            color="#ff9800"
+            link={getLink('disbursed')}
+            tooltip="Gross Funds Disbursed"
+          />
         </Grid>
-        <Grid item xs={12} sm={6} md={3} lg={3}>
+        <Grid item xs={12} sm={6} md={4} lg={4}>
+          <StatCard
+            title="Net Disbursed"
+            value={disbursedData.count || 0}
+            amount={disbursedData.netAmount ?? disbursedData.amount}
+            icon={AccountBalanceWalletRounded}
+            color="#00bcd4"
+            link={getLink('disbursed')}
+            tooltip="Net Funds Disbursed"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={4} lg={4}>
+          <StatCard
+            title="ABND"
+            value={abndData.count ?? (counts['abnd'] || 0)}
+            amount={abndData.amount}
+            icon={FactCheckRounded}
+            color="#64748b"
+            link={getLink('abnd')}
+            tooltip="Approved But Not Disbursed"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={4} lg={4}>
           <StatCard title="Rejected" value={counts['rejected'] || 0} icon={CancelRounded} color="#dd2c00" link={getLink('rejected')} tooltip="Rejected Tickets" />
         </Grid>
-        <Grid item xs={12} sm={6} md={3} lg={3}>
+        <Grid item xs={12} sm={6} md={4} lg={4}>
           <StatCard title="Drop" value={counts['drop'] || 0} icon={DeleteForeverRounded} color="#ff6e40" link={getLink('drop')} tooltip="Dropped Tickets" />
         </Grid>
       </Grid>
@@ -611,6 +661,7 @@ function SalesDashboard() {
   const [newApps, setNewApps] = useState<any>({});
   const [approvedData, setApprovedData] = useState<any>({});
   const [disbursedData, setDisbursedData] = useState<any>({});
+  const [abndData, setAbndData] = useState<any>({});
 
   const currentYear = new Date().getFullYear();
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
@@ -756,12 +807,14 @@ function SalesDashboard() {
           }),
           fetchTotalTickets("approved", activeUserId, role, date || undefined, selectedMonth || undefined, selectedMonth ? currentYear.toString() : undefined, selectedCompany || undefined),
           fetchTotalTickets("disbursed", activeUserId, role, date || undefined, selectedMonth || undefined, selectedMonth ? currentYear.toString() : undefined, selectedCompany || undefined),
+          fetchTotalTickets("abnd", activeUserId, role, date || undefined, selectedMonth || undefined, selectedMonth ? currentYear.toString() : undefined, selectedCompany || undefined),
         ]);
         setCounts(aggCounts || {});
         const freshCount = freshApps?.data?.data ?? 0;
         setNewApps({ count: typeof freshCount === 'object' ? freshCount.count : freshCount });
         setApprovedData(typeof approved === 'object' && approved !== null ? approved : { count: approved, amount: null });
         setDisbursedData(typeof disbursed === 'object' && disbursed !== null ? disbursed : { count: disbursed, amount: null });
+        setAbndData(typeof abnd === 'object' && abnd !== null ? abnd : { count: abnd, amount: null });
 
         fetchRecentApps(date, selectedMonth, activeUserId);
       } catch (err) {
@@ -939,16 +992,46 @@ function SalesDashboard() {
       {/* Section 3: Final Outcomes */}
       <Typography variant="h6" sx={{ fontWeight: 600, color: '#334155', mb: 2 }}>Final Outcomes</Typography>
       <Grid container spacing={2} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <StatCard title="Approved" value={approvedData.count || 0} amount={approvedData.amount} icon={AccountBalanceRounded} color="#69f0ae" link={getLink('approved')} tooltip="Funds Approved" />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard title="Disbursed" value={disbursedData.count || 0} amount={disbursedData.amount} icon={ReportRounded} color="#ff9800" link={getLink('disbursed')} tooltip="Funds Disbursed" />
+        <Grid item xs={12} sm={6} md={4}>
+          <StatCard
+            title="Gross Disbursed"
+            value={disbursedData.count || 0}
+            amount={disbursedData.grossAmount ?? disbursedData.amount}
+            icon={ReportRounded}
+            color="#ff9800"
+            link={getLink('disbursed')}
+            tooltip="Gross Funds Disbursed"
+          />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
+          <StatCard
+            title="Net Disbursed"
+            value={disbursedData.count || 0}
+            amount={disbursedData.netAmount ?? disbursedData.amount}
+            icon={AccountBalanceWalletRounded}
+            color="#00bcd4"
+            link={getLink('disbursed')}
+            tooltip="Net Funds Disbursed"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={4}>
+          <StatCard
+            title="ABND"
+            value={abndData.count ?? (counts['abnd'] || 0)}
+            amount={abndData.amount}
+            icon={FactCheckRounded}
+            color="#64748b"
+            link={getLink('abnd')}
+            tooltip="Approved But Not Disbursed"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={4}>
           <StatCard title="Rejected" value={counts['rejected'] || 0} icon={CancelRounded} color="#dd2c00" link={getLink('rejected')} tooltip="Rejected Tickets" />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <StatCard title="Drop" value={counts['drop'] || 0} icon={DeleteForeverRounded} color="#ff6e40" link={getLink('drop')} tooltip="Dropped Tickets" />
         </Grid>
       </Grid>
@@ -1024,19 +1107,11 @@ function SalesDashboard() {
   );
 }
 
-export default function Page(): React.JSX.Element {
+function AdminDashboard() {
   const { decodedToken, getCookies, capitalizeEachWord } = Utility();
   const cookies = getCookies();
   const userToken = (cookies as any).token;
   const { id, role, companyId, username, name } = decodedToken(userToken?.value) || {};
-
-  if (role === 'sales') {
-    return <SalesDashboard />;
-  }
-
-  if (role === 'sub admin') {
-    return <SubAdminDashboard />;
-  }
 
   const [date, setDate] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string>("");
@@ -1152,6 +1227,7 @@ export default function Page(): React.JSX.Element {
         totalRejected,
         totalDrop,
         totalHold,
+        totalAbnd,
         totalTicketsByMonth,
         doneTicketsByMonth,
       ] = await Promise.all([
@@ -1174,6 +1250,7 @@ export default function Page(): React.JSX.Element {
         fetchTotalTickets("rejected", id, role, date, selectedMonth, currentYear.toString()),
         fetchTotalTickets("drop", id, role, date, selectedMonth, currentYear.toString()),
         fetchTotalTickets("hold", id, role, date, selectedMonth, currentYear.toString()),
+        fetchTotalTickets("abnd", id, role, date, selectedMonth, currentYear.toString()),
         getTotalTicketsByMonth(currentYear),
         getDoneTicketsByMonth(currentYear),
       ]);
@@ -1188,6 +1265,11 @@ export default function Page(): React.JSX.Element {
         typeof totalApproved === "object" && totalApproved !== null
           ? totalApproved
           : { count: totalApproved, amount: null };
+
+      const normalizedAbnd =
+        typeof totalAbnd === "object" && totalAbnd !== null
+          ? totalAbnd
+          : { count: totalAbnd, amount: null };
 
       const normalizedNewApplications = totalNewApplications
         ? {
@@ -1212,6 +1294,7 @@ export default function Page(): React.JSX.Element {
         totalRejected,
         totalDrop,
         totalHold,
+        totalAbnd: normalizedAbnd,
         totalTicketsByMonth,
         doneTicketsByMonth,
       });
@@ -1339,13 +1422,34 @@ export default function Page(): React.JSX.Element {
     },
     {
       icon: ReportRounded,
-      label: "Disbursed",
-      key: "disbursed",
+      label: "Gross Disbursed",
+      key: "grossDisbursed",
       color: "#f5f7fa",
       iconBgColor: "#ff9800",
       count: allCounts?.totalDisbursed?.count,
-      amount: allCounts?.totalDisbursed?.amount,
+      amount: allCounts?.totalDisbursed?.grossAmount ?? allCounts?.totalDisbursed?.amount,
       link: getAdminLink("disbursed"),
+    },
+    {
+      icon: AccountBalanceWalletRounded,
+      label: "Net Disbursed",
+      key: "netDisbursed",
+      color: "#f5f7fa",
+      iconBgColor: "#00bcd4",
+      count: allCounts?.totalDisbursed?.count,
+      amount: allCounts?.totalDisbursed?.netAmount ?? allCounts?.totalDisbursed?.amount,
+      link: getAdminLink("disbursed"),
+    },
+    {
+      icon: FactCheckRounded,
+      label: "ABND",
+      key: "abnd",
+      color: "#f5f7fa",
+      iconBgColor: "#64748b",
+      count: allCounts?.totalAbnd?.count,
+      amount: allCounts?.totalAbnd?.amount,
+      link: getAdminLink("abnd"),
+      tooltip: "(Approved But Not Disbursed)",
     },
     {
       icon: SendTimeExtensionIcon,
@@ -1712,7 +1816,7 @@ export default function Page(): React.JSX.Element {
             lg={12}
             xs={12}
           >
-            <Grid item lg={7} md={6} xs={12}>
+            <Grid lg={7} md={6} xs={12}>
               <Paper
                 elevation={3}
                 sx={{
@@ -1743,7 +1847,7 @@ export default function Page(): React.JSX.Element {
             </Grid>
 
             {/* 📌 Traffic Chart */}
-            <Grid item lg={5} md={6} xs={12}>
+            <Grid lg={5} md={6} xs={12}>
               <Paper
                 elevation={3}
                 sx={{
@@ -1763,6 +1867,7 @@ export default function Page(): React.JSX.Element {
                     allCounts?.totalPendencyInFile || 0,
                     allCounts?.totalToBeDisbursed || 0,
                     allCounts?.totalDisbursed?.count || 0,
+                    allCounts?.totalAbnd?.count || 0,
                     allCounts?.totalFileSendToBanker || 0,
                     allCounts?.totalToBeApproved || 0,
                     allCounts?.totalApproved?.count || 0,
@@ -1775,6 +1880,7 @@ export default function Page(): React.JSX.Element {
                     "Pendency in File",
                     "To be Disbursed",
                     "Disbursed",
+                    "ABND",
                     "File Send to Banker",
                     "To be Approved",
                     "Approved",
@@ -1787,7 +1893,7 @@ export default function Page(): React.JSX.Element {
           </Grid>
 
           <Grid container spacing={3} lg={12} xs={12}>
-            <Grid item lg={4} md={6} xs={12}>
+            <Grid lg={4} md={6} xs={12}>
               <Paper
                 elevation={3}
                 sx={{
@@ -1802,7 +1908,7 @@ export default function Page(): React.JSX.Element {
             </Grid>
 
             {/* 📜 Latest Orders */}
-            <Grid item lg={8} md={6} xs={12}>
+            <Grid lg={8} md={6} xs={12}>
               <Paper
                 elevation={3}
                 sx={{
@@ -1820,4 +1926,29 @@ export default function Page(): React.JSX.Element {
       </Box>
     </Box>
   );
+}
+
+export default function Page(): React.JSX.Element {
+  const [isMounted, setIsMounted] = useState(false);
+  const { decodedToken } = Utility();
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (!isMounted) {
+    return <Box sx={{ minHeight: "60vh" }} />;
+  }
+
+  const role = decodedToken()?.role;
+
+  if (role === 'sales') {
+    return <SalesDashboard />;
+  }
+
+  if (role === 'sub admin') {
+    return <SubAdminDashboard />;
+  }
+
+  return <AdminDashboard />;
 }
