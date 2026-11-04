@@ -115,7 +115,7 @@ export function LatestApplications({
     if (data?.results && data.results.length > 0) {
       setApplications(data.results);
     } else {
-      setApplications([]);
+      setApplications((prev: any) => (prev && prev.length > 0 ? [] : prev));
     }
   }, [data?.results, getApplicationsError]);
 

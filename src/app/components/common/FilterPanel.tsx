@@ -44,6 +44,7 @@ import {
   CurrencyRupeeRounded,
   BusinessRounded,
   HourglassEmptyRounded,
+  FactCheckRounded,
 } from "@mui/icons-material";
 import ArrowRightIcon from "@mui/icons-material/ArrowRight";
 import dayjs from "dayjs";
@@ -88,6 +89,7 @@ const statusOptions = [
   "to be disbursed",
   "approved",
   "disbursed",
+  "abnd",
   "carry forward",
   "drop",
   "rejected",
@@ -148,13 +150,14 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
   const normalizeStatusForDisplay = (status: string): string => {
     if (status === "forwardedtome") return "forwarded to me";
     if (status === "forwardedbyme") return "forwarded by me";
+    if (status === "abnd") return "ABND";
     return status;
   };
 
   const getStatusDisplayLabel = (status: string): string => {
     const displayStatus = normalizeStatusForDisplay(status);
-    return `${displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1)
-      } (${ticketCount})`;
+    const label = displayStatus === "ABND" ? "ABND" : displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1);
+    return `${label} (${ticketCount})`;
   };
 
   const getStatusColor = (status: string): string => {
@@ -170,6 +173,8 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
       "to be disbursed": "#9c27b0",
       approved: "#8bc34a",
       disbursed: "#00bcd4",
+      abnd: "#64748b",
+      ABND: "#64748b",
       "carry forward": "#9e9e9e",
       rejected: "#f44336",
       drop: "#ff5722",
@@ -229,6 +234,8 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
       "to be disbursed": <ForwardRounded sx={{ fontSize: 20 }} />,
       approved: <AccountBalanceRounded sx={{ fontSize: 20 }} />,
       disbursed: <ReportRounded sx={{ fontSize: 20 }} />,
+      abnd: <FactCheckRounded sx={{ fontSize: 20 }} />,
+      ABND: <FactCheckRounded sx={{ fontSize: 20 }} />,
       "carry forward": <ForwardRounded sx={{ fontSize: 20 }} />,
       rejected: <CancelRounded sx={{ fontSize: 20 }} />,
       drop: <DeleteForeverRounded sx={{ fontSize: 20 }} />,
@@ -556,7 +563,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
           <Tooltip title="Filter by File Status">
             <Chip
               icon={getStatusIcon(sortBy)}
-              label={`${sortBy.charAt(0).toUpperCase() + sortBy.slice(1)} (${ticketCount})`}
+              label={`${sortBy === "abnd" ? "ABND" : sortBy.charAt(0).toUpperCase() + sortBy.slice(1)} (${ticketCount})`}
               onClick={(e) => setAnchorEl(e.currentTarget)}
               sx={{
                 backgroundColor: sortBy === "all" ? "#f1f5f9" : `${getStatusColor(sortBy)}15`,
@@ -629,7 +636,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                   }}
                 >
                   {getStatusIcon(status)}
-                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                  {status === "abnd" ? "ABND" : status.charAt(0).toUpperCase() + status.slice(1)}
                 </MenuItem>
               )),
               <MenuItem
