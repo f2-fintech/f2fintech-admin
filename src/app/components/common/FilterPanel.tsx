@@ -74,6 +74,8 @@ interface FilterPanelProps {
   handleProviderChange: (event: string | null) => void;
   ticketCount: number;
   disbursedAmount?: number;
+  partnerSourcer: boolean;
+  setPartnerSourcer: React.Dispatch<React.SetStateAction<boolean>>;
   handleFilterChange: (newFilterState: any) => void;
 }
 
@@ -116,6 +118,8 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
   userRole,
   ticketCount,
   disbursedAmount,
+  partnerSourcer,
+  setPartnerSourcer,
   searchLabel,
   handleFilterChange,
 }) => {
@@ -581,6 +585,33 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
               }}
             />
           </Tooltip>
+
+          {/* Partner and Sourcer Filter */}
+          <Tooltip title="Filter Partner and Sourcer tickets">
+            <Chip
+              icon={<BusinessRounded sx={{ fontSize: 18 }} />}
+              label="Partner and Sourcer"
+              onClick={() => {
+                const next = !partnerSourcer;
+                setPartnerSourcer(next);
+                handleFilterChange({ partnerSourcer: next, page: 1 });
+              }}
+              sx={{
+                backgroundColor: partnerSourcer ? "#1976d215" : "#f1f5f9",
+                color: partnerSourcer ? "#1976d2" : "#475569",
+                border: partnerSourcer ? "1px solid #1976d230" : "1px solid #e2e8f0",
+                borderRadius: "8px",
+                fontWeight: 600,
+                fontSize: "0.75rem",
+                px: 0.5,
+                "&:hover": {
+                  backgroundColor: partnerSourcer ? "#1976d225" : "#e2e8f0",
+                },
+                "& .MuiChip-icon": { color: "inherit", ml: 1 },
+                transition: "all 0.2s ease"
+              }}
+            />
+          </Tooltip>
         </Box>
         <Menu
           anchorEl={anchorEl}
@@ -974,6 +1005,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
           startDate ||
           selectedUser ||
           selectedBank ||
+          partnerSourcer ||
           (sortBy && sortBy !== "all") ||
           (loanProvider && loanProvider !== "all")) && (
             <Tooltip title="Clear All Filters">
@@ -985,6 +1017,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                   setStartDate(null);
                   setEndDate(null);
                   setSelectedUser(null);
+                  setPartnerSourcer(false);
                   handleFilterChange({});
                   handleStatusChange(getDefaultStatus());
                   handleBankChange("all");

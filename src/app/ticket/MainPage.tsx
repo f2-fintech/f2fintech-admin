@@ -55,6 +55,7 @@ const Ticket = () => {
   const [endDate, setEndDate] = useState<string | null>(null);
   const [disbursedAmount, setDisbursedAmount] = useState<number>(0);
   const [toggleListView, setToggleListView] = useState("table");
+  const [partnerSourcer, setPartnerSourcer] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [hasMoreData, setHasMoreData] = useState<boolean>(true);
 
@@ -125,30 +126,43 @@ const Ticket = () => {
     if (id) computeId();
   }, [selectedTeamMember, id, userRole]);
 
-  const apiEndpoint = selectedUser
-    ? `get-all-tickets/${selectedUser.id}${sortBy === "disbursed" ? "?onlyDisbursed=true" : ""}${selectedCompany ? `&companyId=${selectedCompany}` : ''}`
+  const companyQueryParam = partnerSourcer
+    ? "excludeCompanyId=101"
+    : selectedCompany
+      ? `companyId=${selectedCompany}`
+      : "";
+
+  const appendCompanyParam = (endpoint: string) => {
+    if (!companyQueryParam) return endpoint;
+    return `${endpoint}${endpoint.includes("?") ? "&" : "?"}${companyQueryParam}`;
+  };
+
+  const baseEndpoint = selectedUser
+    ? `get-all-tickets/${selectedUser.id}${sortBy === "disbursed" ? "?onlyDisbursed=true" : ""}`
     : userRole === "admin" || userRole === "sub admin"
       ? sortBy === "all" && loanProvider === "all"
-        ? `get-all-tickets${selectedCompany ? `?companyId=${selectedCompany}` : ''}`
+        ? `get-all-tickets`
         : `get-all-tickets?status=${sortBy == "forwarded to me" || sortBy == "forwarded by me"
           ? sortBy.replace(/\s+/g, "")
           : sortBy
-        }&provider=${loanProvider}${sortBy === "disbursed" ? "&onlyDisbursed=true" : ""}${selectedCompany ? `&companyId=${selectedCompany}` : ''}`
+        }&provider=${loanProvider}${sortBy === "disbursed" ? "&onlyDisbursed=true" : ""}`
       : userRole === "operations" || userRole === "credit"
         ? sortBy === "all" && loanProvider === "all"
-          ? `get-all-tickets/${decodedToken()?.id}${selectedCompany ? `?companyId=${selectedCompany}` : ''}`
+          ? `get-all-tickets/${decodedToken()?.id}`
           : `get-all-tickets/${decodedToken()?.id}?status=${sortBy == "forwarded to me" || sortBy == "forwarded by me"
             ? sortBy.replace(/\s+/g, "")
             : sortBy
-          }&provider=${loanProvider}${sortBy === "disbursed" ? "&onlyDisbursed=true" : ""}${selectedCompany ? `&companyId=${selectedCompany}` : ''}`
+          }&provider=${loanProvider}${sortBy === "disbursed" ? "&onlyDisbursed=true" : ""}`
         : userRole === "sales"
           ? sortBy === "all" && loanProvider === "all"
-            ? `get-all-tickets/${computedSalesUserId}?appliedBy=sales${selectedCompany ? `&companyId=${selectedCompany}` : ''}`
+            ? `get-all-tickets/${computedSalesUserId}?appliedBy=sales`
             : `get-all-tickets/${computedSalesUserId}?appliedBy=sales&status=${sortBy == "forwarded to me" || sortBy == "forwarded by me"
               ? sortBy.replace(/\s+/g, "")
               : sortBy
-            }&provider=${loanProvider}${sortBy === "disbursed" ? "&onlyDisbursed=true" : ""}${selectedCompany ? `&companyId=${selectedCompany}` : ''}`
-          : `get-all-tickets${sortBy === "disbursed" ? "?onlyDisbursed=true" : ""}${selectedCompany ? `${sortBy === "disbursed" ? '&' : '?'}companyId=${selectedCompany}` : ''}`;
+            }&provider=${loanProvider}${sortBy === "disbursed" ? "&onlyDisbursed=true" : ""}`
+          : `get-all-tickets${sortBy === "disbursed" ? "?onlyDisbursed=true" : ""}`;
+
+  const apiEndpoint = appendCompanyParam(baseEndpoint);
 
   const {
     value: ticketData,
@@ -210,7 +224,9 @@ const Ticket = () => {
       exportParams.set("page", "1");
       exportParams.set("limit", "10000"); // Adjust based on your needs
 
-      if (selectedCompany) {
+      if (partnerSourcer) {
+        exportParams.set("excludeCompanyId", "101");
+      } else if (selectedCompany) {
         exportParams.set("companyId", selectedCompany);
       }
       // Add date filters if present
@@ -390,6 +406,7 @@ const Ticket = () => {
       setSelectedUser(null);
       setSortBy("all");
       setLoanProvider("all");
+      setPartnerSourcer(false);
       setStartDate(null);
       setEndDate(null);
       setDisbursedAmount(0); // Add this line
@@ -477,8 +494,10 @@ const Ticket = () => {
     const queryEndDate = searchParams.get("endDate");
     const queryUserId = searchParams.get("userId");
     const queryMonth = searchParams.get("month");
+    const queryPartnerSourcer = searchParams.get("partnerSourcer");
 
     // Set all filters from URL
+    setPartnerSourcer(queryPartnerSourcer === "true");
     setSortBy(queryStatus || (userRole === "credit" ? "forwarded" : "all"));
     setLoanProvider(queryProvider || "all");
 
@@ -521,6 +540,7 @@ const Ticket = () => {
   }, [
     sortBy,
     loanProvider,
+    partnerSourcer,
     filter,
     selectedUser,
     startDate,
@@ -672,6 +692,17 @@ const Ticket = () => {
         params.set("userId", selectedUser.id.toString());
       }
 
+      // Handle partnerSourcer parameter - preserve existing if not being updated
+      if (filterParams.partnerSourcer !== undefined) {
+        if (filterParams.partnerSourcer) {
+          params.set("partnerSourcer", "true");
+        } else {
+          params.delete("partnerSourcer");
+        }
+      } else if (partnerSourcer) {
+        params.set("partnerSourcer", "true");
+      }
+
       // Handle clear all filters case
       if (Object.keys(filterParams).length === 0) {
         params.delete("status");
@@ -679,6 +710,8 @@ const Ticket = () => {
         params.delete("startDate");
         params.delete("endDate");
         params.delete("userId");
+        params.delete("partnerSourcer");
+        setPartnerSourcer(false);
       }
 
       router.push(`?${params.toString()}`, { shallow: true });
@@ -689,6 +722,7 @@ const Ticket = () => {
       dispatch,
       sortBy,
       loanProvider,
+      partnerSourcer,
       startDate,
       endDate,
       selectedUser,
@@ -794,6 +828,8 @@ const Ticket = () => {
               userRole={userRole}
               ticketCount={ticketData?.count}
               disbursedAmount={disbursedAmount}
+              partnerSourcer={partnerSourcer}
+              setPartnerSourcer={setPartnerSourcer}
               handleFilterChange={handleFilterChange}
             />
           </Box>
